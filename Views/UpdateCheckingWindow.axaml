@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VNEditor.Views.UpdateCheckingWindow"
+        Width="360"
+        Height="150"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="BorderOnly"
+        Title="更新检测中">
+    <StackPanel Margin="16" Spacing="10">
+        <TextBlock Text="正在检测更新……" FontWeight="Bold"/>
+        <ProgressBar IsIndeterminate="True" Height="12"/>
+    </StackPanel>
+</Window>

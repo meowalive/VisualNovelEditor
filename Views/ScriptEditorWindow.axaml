@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ae="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
+        xmlns:model="using:VNEditor.Models"
+        xmlns:vm="using:VNEditor.ViewModels"
+        x:Class="VNEditor.Views.ScriptEditorWindow"
+        x:DataType="vm:MainWindowViewModel"
+        mc:Ignorable="d"
+        Width="1200"
+        Height="760"
+        MinWidth="980"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Title="脚本编辑器"
+        Background="{Binding ThemeWindowBackground, FallbackValue=#1E1E1E}">
+    <Grid>
+        <Image Source="{Binding EditorBackgroundImage}" Opacity="0.25" Stretch="UniformToFill" IsHitTestVisible="False"/>
+        <Border Background="{Binding EditorBackgroundTintColorText, FallbackValue=#000000}" Opacity="{Binding EditorBackgroundTintOpacity, FallbackValue=0.25}" IsHitTestVisible="False"/>
+        <Grid RowDefinitions="*,Auto,Auto" ColumnDefinitions="3*,2*" ColumnSpacing="10" RowSpacing="8" Margin="10">
+            <Border Grid.Row="0" Grid.Column="0" BorderThickness="1" CornerRadius="6" BorderBrush="{Binding ThemeBorderColor, FallbackValue=#3C3C3C}">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Text="脚本区" Margin="8" FontWeight="Bold" Foreground="{Binding ThemeTextPrimary, FallbackValue=#D4D4D4}"/>
+                    <ae:TextEditor x:Name="ScriptEditor"
+                                   Grid.Row="1"
+                                   ShowLineNumbers="True"
+                                   HorizontalScrollBarVisibility="Auto"
+                                   VerticalScrollBarVisibility="Auto"
+                                   FontFamily="Consolas, Cascadia Mono, Microsoft YaHei UI"
+                                   FontSize="14"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="0" Grid.Column="1" BorderThickness="1" CornerRadius="6" BorderBrush="{Binding ThemeBorderColor, FallbackValue=#3C3C3C}">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Text="代码块区（点击插入）" Margin="8" FontWeight="Bold" Foreground="{Binding ThemeTextPrimary, FallbackValue=#D4D4D4}"/>
+                    <ScrollViewer Grid.Row="1" Margin="8,0,8,8">
+                        <ItemsControl x:Name="SnippetItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="model:ScriptSnippetItem">
+                                    <Button Margin="0,0,0,6" HorizontalContentAlignment="Left" Click="OnSnippetClicked">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Preview}" Opacity="0.8" FontFamily="Consolas, Cascadia Mono"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="1" Grid.ColumnSpan="2" BorderThickness="1" CornerRadius="6" BorderBrush="{Binding ThemeBorderColor, FallbackValue=#3C3C3C}" Padding="8">
+                <StackPanel>
+                    <TextBlock Text="语法检查" FontWeight="Bold" Foreground="{Binding ThemeTextPrimary, FallbackValue=#D4D4D4}"/>
+                    <TextBlock x:Name="SyntaxStatusText" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="保存并退出" Click="OnSaveAndCloseClicked"/>
+                <Button Content="退出" Click="OnCancelClicked"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

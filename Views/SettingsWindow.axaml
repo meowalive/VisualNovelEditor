@@ -1,0 +1,90 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VNEditor.ViewModels"
+        x:Class="VNEditor.Views.SettingsWindow"
+        x:Name="Root"
+        x:DataType="vm:MainWindowViewModel"
+        Width="820"
+        Height="320"
+        CanResize="True"
+        SystemDecorations="Full"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        Title="设置 - 魔女：终末旅途 剧情编辑器"
+        RequestedThemeVariant="{Binding RequestedThemeVariantText}"
+        Background="{Binding ThemeWindowBackground}"
+        Opacity="{Binding WindowOpacity}">
+    <Grid RowDefinitions="Auto,*">
+        <Border Grid.Row="0"
+                Background="{Binding ThemeTopBarBackground}"
+                BorderBrush="{Binding ThemeBorderColor}"
+                BorderThickness="0,0,0,1"
+                Padding="8"
+                PointerPressed="OnTopBarPointerPressed">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="设置" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}" FontWeight="Bold"/>
+                <Button Grid.Column="1" Content="—" Width="36" Click="OnMinimizeClicked"/>
+                <Button Grid.Column="2" Content="□" Width="36" Margin="4,0,0,0" Click="OnMaxRestoreClicked"/>
+                <Button Grid.Column="3" Content="✕" Width="36" Margin="4,0,0,0" Click="OnCloseClicked"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="12" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnDefinitions="100,*,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="背景图" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding EditorBackgroundPath, Mode=TwoWay}" Watermark="输入路径或选择图片"/>
+            <Button Grid.Row="0" Grid.Column="2" Content="选择" Margin="8,0,0,0" Click="OnPickBackgroundClicked"/>
+            <Button Grid.Row="0" Grid.Column="3" Content="应用" Margin="8,0,0,0" Command="{Binding ApplyEditorBackgroundCommand}"/>
+            <Button Grid.Row="0" Grid.Column="4" Content="清除" Margin="8,0,0,0" Command="{Binding ClearEditorBackgroundCommand}"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="全局字号" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <NumericUpDown Grid.Row="1" Grid.Column="1" Width="160" Minimum="10" Maximum="28" Increment="1" Value="{Binding GlobalFontSize, Mode=TwoWay}"/>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="界面模式" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <ComboBox Grid.Row="2"
+                      Grid.Column="1"
+                      Width="160"
+                      ItemsSource="{Binding ThemeModeOptions}"
+                      SelectedItem="{Binding ThemeMode, Mode=TwoWay}"/>
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="色调颜色" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="40,Auto,*" ColumnSpacing="8">
+                <Border Grid.Column="0"
+                        Height="24"
+                        CornerRadius="4"
+                        BorderBrush="{Binding ThemeDialogBorder}"
+                        BorderThickness="1"
+                        Background="{Binding EditorBackgroundTintColorText}"/>
+                <Button Grid.Column="1" Content="设置" Click="OnOpenTintPickerClicked"/>
+            </Grid>
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="色调强度" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <Grid Grid.Row="4" Grid.Column="1" ColumnDefinitions="*,80" ColumnSpacing="8">
+                <Slider Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding EditorBackgroundTintOpacity, Mode=TwoWay}"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding EditorBackgroundTintOpacity, StringFormat='{}{0:0.00}'}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Foreground="{Binding ThemeTextPrimary}"/>
+            </Grid>
+
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="窗口透明度" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <Grid Grid.Row="5" Grid.Column="1" ColumnDefinitions="*,80" ColumnSpacing="8">
+                <Slider Grid.Column="0" Minimum="0.2" Maximum="1" Value="{Binding WindowOpacity, Mode=TwoWay}"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding WindowOpacity, StringFormat='{}{0:0.00}'}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Foreground="{Binding ThemeTextPrimary}"/>
+            </Grid>
+
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="窗口模糊" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <ComboBox Grid.Row="6" Grid.Column="1" Width="160"
+                      SelectedIndex="{Binding WindowBlurLevel, Mode=TwoWay}"
+                      ItemsSource="{Binding WindowBlurLevelOptions}"/>
+
+            <StackPanel Grid.Row="7" Grid.ColumnSpan="5" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="关闭" Click="OnCloseClicked"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

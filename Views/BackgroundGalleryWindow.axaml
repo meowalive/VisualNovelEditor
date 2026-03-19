@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:model="using:VNEditor.Models"
+        x:Class="VNEditor.Views.BackgroundGalleryWindow"
+        x:Name="Root"
+        Width="1180"
+        Height="760"
+        SystemDecorations="Full"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        Title="选择背景图"
+        Background="#1E1E1E">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Grid.Row="0"
+                Background="#2A2A2A"
+                BorderBrush="#3C3C3C"
+                BorderThickness="0,0,0,1"
+                Padding="8"
+                PointerPressed="OnTopBarPointerPressed">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="选择背景图" VerticalAlignment="Center" Foreground="#D4D4D4" FontWeight="Bold"/>
+                <Button Grid.Column="1" Content="—" Width="36" Click="OnMinimizeClicked"/>
+                <Button Grid.Column="2" Content="□" Width="36" Margin="4,0,0,0" Click="OnMaxRestoreClicked"/>
+                <Button Grid.Column="3" Content="✕" Width="36" Margin="4,0,0,0" Click="OnCloseClicked"/>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Margin="12" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Items, ElementName=Root}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="model:BackgroundGalleryItem">
+                        <Button Width="220"
+                                Height="170"
+                                Margin="0,0,12,12"
+                                Background="#252526"
+                                BorderBrush="#3C3C3C"
+                                BorderThickness="1"
+                                Padding="6"
+                                Click="OnBackgroundItemClicked">
+                            <StackPanel Spacing="6">
+                                <Border Height="120" Background="#111111" CornerRadius="4">
+                                    <Image Source="{Binding PreviewImage}" Stretch="UniformToFill"/>
+                                </Border>
+                                <TextBlock Text="{Binding RelativePath}"
+                                           Foreground="#D4D4D4"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="12" Spacing="8">
+            <Button Content="取消" Click="OnCloseClicked"/>
+        </StackPanel>
+    </Grid>
+</Window>

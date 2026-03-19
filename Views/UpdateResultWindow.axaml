@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:view="using:VNEditor.Views"
+        x:Class="VNEditor.Views.UpdateResultWindow"
+        x:DataType="view:UpdateResultWindow"
+        Width="540"
+        Height="240"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="BorderOnly"
+        Title="更新检测结果">
+    <Grid RowDefinitions="*,Auto" Margin="16">
+        <TextBlock Text="{Binding MessageText}" TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="确定" Click="OnOkClicked"/>
+        </StackPanel>
+    </Grid>
+</Window>

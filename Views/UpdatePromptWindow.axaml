@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:view="using:VNEditor.Views"
+        x:Class="VNEditor.Views.UpdatePromptWindow"
+        x:DataType="view:UpdatePromptWindow"
+        Width="560"
+        Height="320"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="BorderOnly"
+        Title="发现更新">
+    <Grid RowDefinitions="*,Auto" Margin="16">
+        <StackPanel Spacing="10">
+            <TextBlock Text="检测到新版本可用（SHA256 不一致）。是否立即更新？"
+                       FontWeight="Bold"
+                       TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding MessageText}"
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="稍后" Click="OnLaterClicked"/>
+            <Button Content="立即更新" Click="OnUpdateClicked"/>
+        </StackPanel>
+    </Grid>
+</Window>

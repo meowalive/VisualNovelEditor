@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseAppHost>true</UseAppHost>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.0" />
+    <PackageReference Include="AvaloniaColorPicker" Version="1.4.0" />
+    <PackageReference Include="AvaloniaEdit.TextMate" Version="11.4.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
+    <PackageReference Include="LuaCSharp" Version="0.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 同级目录有 Witch.Extern.dll 时优先使用，否则用项目引用 -->
+    <Reference Include="Witch.Extern" Condition="Exists('$(MSBuildProjectDirectory)\Witch.Extern.dll')">
+      <HintPath>$(MSBuildProjectDirectory)\Witch.Extern.dll</HintPath>
+    </Reference>
+    <ProjectReference Include="..\..\Witch.Extern.csproj" Condition="!Exists('$(MSBuildProjectDirectory)\Witch.Extern.dll')" />
+  </ItemGroup>
+</Project>
