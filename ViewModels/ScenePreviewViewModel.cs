@@ -44,6 +44,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [ObservableProperty] private string previewChoice2Text = "选项2";
     [ObservableProperty] private string previewChoice3Text = "选项3";
     [ObservableProperty] private string previewChoice4Text = "选项4";
+    [ObservableProperty] private bool previewDialogueBoxVisible = true;
     [ObservableProperty] private bool isFinished;
 
     public ScenePreviewViewModel(
@@ -202,6 +203,12 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             EndPreview("场景播放完成。");
             return;
+        }
+
+        var hideFlag = VisualNovelScriptExecutorParser.ParseHideDialogue(line.BaseScript);
+        if (hideFlag.HasValue)
+        {
+            PreviewDialogueBoxVisible = !hideFlag.Value;
         }
 
         PreviewText = line.Text;

@@ -23,4 +23,9 @@ public static class VisualNovelScriptExecutorParser
     {
         return LuaScriptRuntimeService.TryExecuteAndExtractFirstAction(script, out action, out error);
     }
+
+    public static bool? ParseHideDialogue(string? script)
+    {
+        return LuaScriptRuntimeService.ExtractHideDialogue(script);
+    }
 }

@@ -52,6 +52,18 @@ public partial class ScriptEditorWindow : Window
             "参数: 无",
             "作用: 结束当前对话并关闭对话（同 EndDialogue）"
         ),
+        new LuaCompletionData(
+            "HideDialogue",
+            "HideDialogue(true)",
+            "参数: flag (boolean) — true 隐藏 / false 显示",
+            "作用: 隐藏或显示对话框"
+        ),
+        new LuaCompletionData(
+            "隐藏对话框",
+            "隐藏对话框(true)",
+            "参数: flag (boolean) — true 隐藏 / false 显示",
+            "作用: 隐藏或显示对话框（同 HideDialogue）"
+        ),
     };
 
     public string ScriptText { get; private set; } = string.Empty;
@@ -301,6 +313,8 @@ public partial class ScriptEditorWindow : Window
         {
             new() { Title = "对话跳转", Code = "跳转(\"scene_1_1\");" },
             new() { Title = "结束对话", Code = "结束();" },
+            new() { Title = "隐藏对话框", Code = "隐藏对话框(true);" },
+            new() { Title = "显示对话框", Code = "隐藏对话框(false);" },
         };
     }
 }

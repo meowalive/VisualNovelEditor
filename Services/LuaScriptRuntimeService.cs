@@ -1,52 +1,69 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using Lua;
 using Lua.Standard;
 
 namespace VNEditor.Services;
 
+public sealed record ScriptMethodDef(string Name, string? Alias, string Params, string LuaBody);
+
 public static class LuaScriptRuntimeService
 {
+    public static readonly ScriptMethodDef[] MethodDefs =
+    {
+        new("ShowDialogue", "跳转",    "id",   """__vn_set_action("Jump", id)"""),
+        new("EndDialogue",  "结束",    "",     """__vn_set_action("EndDialogue", "")"""),
+        new("HideDialogue", "隐藏对话框", "flag", "if flag == nil then flag = true end __vn_hide_dialogue = flag"),
+    };
+
     private static readonly Regex InvocationRegex = new(
         @"([A-Za-z_\u0080-\uFFFF][A-Za-z0-9_\u0080-\uFFFF]*(?:\.[A-Za-z_\u0080-\uFFFF][A-Za-z0-9_\u0080-\uFFFF]*)?)\s*\(",
         RegexOptions.Compiled);
-    private static readonly HashSet<string> AllowedInvocations = new(StringComparer.Ordinal)
+
+    private static readonly HashSet<string> AllowedInvocations = new(
+        MethodDefs.SelectMany(d => d.Alias != null ? new[] { d.Name, d.Alias } : new[] { d.Name }),
+        StringComparer.Ordinal);
+
+    private static readonly string Prelude = BuildPrelude();
+
+    private static string BuildPrelude()
     {
-        "ShowDialogue",
-        "EndDialogue",
-        "跳转",
-        "结束"
-    };
+        var sb = new StringBuilder();
+        sb.AppendLine("__vn_action_type = nil");
+        sb.AppendLine("__vn_action_target = nil");
+        sb.AppendLine("__vn_hide_dialogue = nil");
+        sb.AppendLine("local __vn_self = {}");
+        sb.AppendLine("self = __vn_self");
+        sb.AppendLine("VisualNovelScriptExecutor = __vn_self");
+        sb.AppendLine("PlayerInfo = setmetatable({}, { __index = function(_, _) return function(...) return nil end end })");
+        sb.AppendLine("local function __vn_set_action(t, target) if __vn_action_type == nil then __vn_action_type = t __vn_action_target = target end end");
+        foreach (var def in MethodDefs)
+        {
+            sb.AppendLine($"function {def.Name}({def.Params}) {def.LuaBody} end");
+            sb.AppendLine($"__vn_self.{def.Name} = {def.Name}");
+            if (!string.IsNullOrEmpty(def.Alias))
+            {
+                sb.AppendLine($"__vn_self[\"{def.Alias}\"] = {def.Name}");
+            }
+        }
+        return sb.ToString();
+    }
 
-    private const string Prelude = """
-                                   __vn_action_type = nil
-                                   __vn_action_target = nil
-
-                                   -- 注入与 VisualNovelScriptExecutor 一致的最小可执行环境（无副作用）
-                                   local __vn_self = {}
-                                   self = __vn_self
-                                   VisualNovelScriptExecutor = __vn_self
-                                   PlayerInfo = setmetatable({}, {
-                                       __index = function(_, _)
-                                           return function(...) return nil end
-                                       end
-                                   })
-
-                                   local function __vn_set_action(t, target)
-                                       if __vn_action_type == nil then
-                                           __vn_action_type = t
-                                           __vn_action_target = target
-                                       end
-                                   end
-
-                                   function ShowDialogue(id) __vn_set_action("Jump", id) end
-                                   function EndDialogue() __vn_set_action("EndDialogue", "") end
-                                   __vn_self.ShowDialogue = ShowDialogue
-                                   __vn_self.EndDialogue = EndDialogue
-                                   __vn_self["跳转"] = ShowDialogue
-                                   __vn_self["结束"] = EndDialogue
-                                   """;
+    /// <summary>将脚本中的中文别名替换为对应英文方法名，使 Lua 解析器能正确处理。</summary>
+    public static string NormalizeAliases(string script)
+    {
+        foreach (var def in MethodDefs)
+        {
+            if (!string.IsNullOrEmpty(def.Alias))
+            {
+                script = script.Replace(def.Alias, def.Name);
+            }
+        }
+        return script;
+    }
 
     public static IReadOnlyList<string> ValidateSyntax(string? script)
     {
@@ -61,7 +78,7 @@ public static class LuaScriptRuntimeService
             using var state = LuaState.Create();
             state.OpenStandardLibraries();
             // 仅做 Lua 语法编译检查，不执行用户脚本，避免 ShowDialogue 等运行时依赖报“未定义”。
-            var normalizedScript = VNLuaFormatter.Format(script);
+            var normalizedScript = NormalizeAliases(VNLuaFormatter.Format(script));
             var wrapped = "function __vn_syntax_check__()\n" + normalizedScript + "\nend";
             _ = state.DoStringAsync(wrapped).GetAwaiter().GetResult();
         }
@@ -76,7 +93,7 @@ public static class LuaScriptRuntimeService
 
         if (errors.Count == 0)
         {
-            var normalizedScript = VNLuaFormatter.Format(script);
+            var normalizedScript = NormalizeAliases(VNLuaFormatter.Format(script));
             var callError = ValidateAllowedInvocation(normalizedScript);
             if (!string.IsNullOrWhiteSpace(callError))
             {
@@ -102,7 +119,7 @@ public static class LuaScriptRuntimeService
             return true;
         }
 
-        var normalizedScript = VNLuaFormatter.Format(script);
+        var normalizedScript = NormalizeAliases(VNLuaFormatter.Format(script));
         var callError = ValidateAllowedInvocation(normalizedScript);
         if (!string.IsNullOrWhiteSpace(callError))
         {
@@ -137,6 +154,34 @@ public static class LuaScriptRuntimeService
         {
             error = GetExceptionMessage(ex);
             return false;
+        }
+    }
+
+    public static bool? ExtractHideDialogue(string? script)
+    {
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return null;
+        }
+
+        var normalizedScript = NormalizeAliases(VNLuaFormatter.Format(script));
+        try
+        {
+            using var state = LuaState.Create();
+            state.OpenStandardLibraries();
+            _ = state.DoStringAsync(Prelude + Environment.NewLine + normalizedScript).GetAwaiter().GetResult();
+
+            var hideValue = state.Environment["__vn_hide_dialogue"];
+            if (hideValue.TryRead<bool>(out var hide))
+            {
+                return hide;
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
         }
     }
 

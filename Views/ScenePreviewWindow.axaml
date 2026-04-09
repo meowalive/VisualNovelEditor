@@ -63,7 +63,8 @@
                     BorderThickness="3"
                     CornerRadius="14"
                     Padding="16"
-                    Margin="16">
+                    Margin="16"
+                    IsVisible="{Binding PreviewDialogueBoxVisible}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="{Binding PreviewSpeaker}" Foreground="White" FontSize="28" FontWeight="Bold"/>
                     <controls:RichDialogueTextBlock DialogueText="{Binding PreviewText}" Foreground="White" FontSize="24" TextWrapping="Wrap"/>

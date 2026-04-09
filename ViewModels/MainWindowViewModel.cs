@@ -76,6 +76,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string previewChoice2Text = "选项2";
     [ObservableProperty] private string previewChoice3Text = "选项3";
     [ObservableProperty] private string previewChoice4Text = "选项4";
+    [ObservableProperty] private bool previewDialogueBoxVisible = true;
     [ObservableProperty] private bool optionEditor1Visible;
     [ObservableProperty] private bool optionEditor2Visible;
     [ObservableProperty] private bool optionEditor3Visible;
@@ -991,6 +992,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _playingScene = SelectedScene;
         _playingIndex = 0;
         _activeBackgroundPath = string.Empty;
+        PreviewDialogueBoxVisible = true;
         IsPlayingScene = true;
         ApplyCurrentPlayLine();
         StatusText = $"开始预览场景：{_playingScene.Name}";
@@ -1002,6 +1004,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IsPlayingScene = false;
         _playingScene = null;
         _playingIndex = -1;
+        PreviewDialogueBoxVisible = true;
         HideChoices();
         PreviewHint = "点击预览区可查看当前行";
         UpdatePreview();
@@ -1202,6 +1205,12 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         SelectedLine = line;
+        var hideFlag = VisualNovelScriptExecutorParser.ParseHideDialogue(line.BaseScript);
+        if (hideFlag.HasValue)
+        {
+            PreviewDialogueBoxVisible = !hideFlag.Value;
+        }
+
         ApplyPreviewFromLine(line, keepBackgroundWhenEmpty: true);
         SetupChoices(line);
     }

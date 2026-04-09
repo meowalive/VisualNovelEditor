@@ -263,7 +263,7 @@
                                                 </Border>
                                             </Grid>
                                         </Grid>
-                                        <Border VerticalAlignment="Bottom" Background="#E6191A1E" BorderBrush="#CCFFFFFF" BorderThickness="4" CornerRadius="18" Padding="24" Margin="18">
+                                        <Border VerticalAlignment="Bottom" Background="#E6191A1E" BorderBrush="#CCFFFFFF" BorderThickness="4" CornerRadius="18" Padding="24" Margin="18" IsVisible="{Binding PreviewDialogueBoxVisible}">
                                             <StackPanel Spacing="4">
                                                 <TextBlock Text="{Binding PreviewSpeaker}" FontWeight="Bold" FontSize="44" Foreground="White"/>
                                                 <controls:RichDialogueTextBlock DialogueText="{Binding PreviewText}" TextWrapping="Wrap" Foreground="White" FontSize="40"/>
