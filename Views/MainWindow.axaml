@@ -42,8 +42,6 @@
                     <Menu Grid.Column="1" Background="Transparent">
                         <MenuItem Header="文件">
                             <MenuItem Header="打开工程" Click="OnOpenProjectClicked"/>
-                            <Separator/>
-                            <MenuItem Header="GitHub 登录" Command="{Binding GitHubBrowserLoginCommand}"/>
                         </MenuItem>
                     </Menu>
                     <Button Grid.Column="3" Content="设置" Click="OnOpenSettingsClicked"/>

@@ -47,17 +47,6 @@ public static class ProjectGitService
         return repo.Network.Remotes[name]?.Url;
     }
 
-    public static bool IsHttpsRemote(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            return false;
-        }
-
-        return url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-               || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
-    }
-
     public static bool IsGitRepository(string workDir)
     {
         return !string.IsNullOrEmpty(Repository.Discover(workDir));
@@ -76,13 +65,13 @@ public static class ProjectGitService
     }
 
     /// <summary>打开工程等：拉取并与远端合并；若有冲突则按远端版本自动解决。</summary>
-    public static GitPullMergeResult PullMergePreferRemote(string workDir, GitHubCredentials? credentials = null) =>
-        PullMergeCore(workDir, credentials, abortOnMergeConflict: false);
+    public static GitPullMergeResult PullMergePreferRemote(string workDir) =>
+        PullMergeCore(workDir, abortOnMergeConflict: false);
 
     /// <summary>拉取合并（冲突按远端）后执行 <c>git lfs pull</c>，拉取 Git LFS 大文件内容。</summary>
-    public static GitPullMergeResult PullMergePreferRemoteWithLfs(string workDir, GitHubCredentials? credentials = null)
+    public static GitPullMergeResult PullMergePreferRemoteWithLfs(string workDir)
     {
-        var merge = PullMergePreferRemote(workDir, credentials);
+        var merge = PullMergePreferRemote(workDir);
         if (!merge.Success)
         {
             return merge;
@@ -208,10 +197,10 @@ public static class ProjectGitService
     }
 
     /// <summary>上传前：先拉取合并；若存在合并冲突则中止（恢复合并前状态），不允许上传。</summary>
-    public static GitPullMergeResult PullMergeBeforePush(string workDir, GitHubCredentials? credentials = null) =>
-        PullMergeCore(workDir, credentials, abortOnMergeConflict: true);
+    public static GitPullMergeResult PullMergeBeforePush(string workDir) =>
+        PullMergeCore(workDir, abortOnMergeConflict: true);
 
-    private static GitPullMergeResult PullMergeCore(string workDir, GitHubCredentials? credentials, bool abortOnMergeConflict)
+    private static GitPullMergeResult PullMergeCore(string workDir, bool abortOnMergeConflict)
     {
         var root = Repository.Discover(workDir);
         if (string.IsNullOrEmpty(root))
@@ -219,36 +208,33 @@ public static class ProjectGitService
             return new GitPullMergeResult { Success = false, Kind = GitPullKind.NotRepository, ErrorMessage = "未找到 Git 仓库。" };
         }
 
-        using var repo = new Repository(root);
-        var sig = BuildSignature(repo);
-        var head = repo.Head;
-        if (!head.IsTracking || head.TrackedBranch == null)
+        string? remoteName;
+        using (var repoForMeta = new Repository(root))
         {
-            return new GitPullMergeResult { Success = true, Kind = GitPullKind.NoUpstream };
+            var h = repoForMeta.Head;
+            if (!h.IsTracking || h.TrackedBranch == null)
+            {
+                return new GitPullMergeResult { Success = true, Kind = GitPullKind.NoUpstream };
+            }
+
+            remoteName = h.RemoteName;
         }
 
-        var remoteName = head.RemoteName;
         if (string.IsNullOrEmpty(remoteName))
         {
             return new GitPullMergeResult { Success = true, Kind = GitPullKind.NoUpstream };
         }
 
-        try
+        var (fetchOk, fetchErr) = RunGitCliCommand(workDir, $"fetch {remoteName}");
+        if (!fetchOk)
         {
-            var fetchOpts = CreateFetchOptions(credentials);
-            Commands.Fetch(repo, remoteName, Array.Empty<string>(), fetchOpts, null);
-        }
-        catch (Exception ex)
-        {
-            return new GitPullMergeResult
-            {
-                Success = false,
-                Kind = GitPullKind.Error,
-                ErrorMessage = FormatGitHttpError(ex, workDir)
-            };
+            return new GitPullMergeResult { Success = false, Kind = GitPullKind.Error, ErrorMessage = fetchErr };
         }
 
-        var upstreamTip = head.TrackedBranch.Tip;
+        using var repo = new Repository(root);
+        var sig = BuildSignature(repo);
+        var head = repo.Head;
+        var upstreamTip = head.TrackedBranch?.Tip;
         if (upstreamTip == null)
         {
             return new GitPullMergeResult { Success = false, Kind = GitPullKind.Error, ErrorMessage = "无法读取上游分支。" };
@@ -411,44 +397,26 @@ public static class ProjectGitService
         return (true, null);
     }
 
-    public static (bool Ok, string? Error) Push(string workDir, GitHubCredentials? credentials = null)
+    public static (bool Ok, string? Error) Push(string workDir)
     {
-        var root = Repository.Discover(workDir);
-        if (string.IsNullOrEmpty(root))
-        {
-            return (false, "未找到 Git 仓库。");
-        }
-
-        using var repo = new Repository(root);
-        var head = repo.Head;
-        if (!head.IsTracking || head.TrackedBranch == null)
-        {
-            return (false, "当前分支未设置上游，无法推送。");
-        }
-
-        try
-        {
-            var pushOpts = CreatePushOptions(credentials);
-            repo.Network.Push(head, pushOpts);
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-
-        return (true, null);
+        return RunGitCliCommand(workDir, "push");
     }
 
     /// <summary>从远端跟踪分支检出指定工作区文件并覆盖本地。</summary>
     public static (bool Ok, string? Error) CheckoutFilesFromTrackedRemote(
         string workDir,
-        IReadOnlyList<string> absoluteFilePaths,
-        GitHubCredentials? credentials = null)
+        IReadOnlyList<string> absoluteFilePaths)
     {
         var root = Repository.Discover(workDir);
         if (string.IsNullOrEmpty(root))
         {
             return (false, "未找到 Git 仓库。");
+        }
+
+        var (fetchOk, fetchErr) = RunGitCliCommand(workDir, "fetch");
+        if (!fetchOk)
+        {
+            return (false, fetchErr);
         }
 
         using var repo = new Repository(root);
@@ -456,16 +424,6 @@ public static class ProjectGitService
         if (!head.IsTracking || head.TrackedBranch == null)
         {
             return (false, "当前分支未设置上游，无法从远端拉取单文件。");
-        }
-
-        try
-        {
-            var fetchOpts = CreateFetchOptions(credentials);
-            Commands.Fetch(repo, head.RemoteName, Array.Empty<string>(), fetchOpts, null);
-        }
-        catch (Exception ex)
-        {
-            return (false, FormatGitHttpError(ex, workDir));
         }
 
         var tip = head.TrackedBranch.Tip;
@@ -514,8 +472,7 @@ public static class ProjectGitService
     /// </summary>
     public static (bool Ok, string? Error) TryCheckoutRoleDataFromTrackedRemote(
         string workDir,
-        string projectRoot,
-        GitHubCredentials? credentials = null)
+        string projectRoot)
     {
         var root = Repository.Discover(workDir);
         if (string.IsNullOrEmpty(root))
@@ -523,21 +480,17 @@ public static class ProjectGitService
             return (false, "未找到 Git 仓库。");
         }
 
+        var (fetchOk, fetchErr) = RunGitCliCommand(workDir, "fetch");
+        if (!fetchOk)
+        {
+            return (false, fetchErr);
+        }
+
         using var repo = new Repository(root);
         var head = repo.Head;
         if (!head.IsTracking || head.TrackedBranch == null)
         {
             return (false, "当前分支未设置上游，无法从远端拉取角色文件。");
-        }
-
-        try
-        {
-            var fetchOpts = CreateFetchOptions(credentials);
-            Commands.Fetch(repo, head.RemoteName, Array.Empty<string>(), fetchOpts, null);
-        }
-        catch (Exception ex)
-        {
-            return (false, FormatGitHttpError(ex, workDir));
         }
 
         var tip = head.TrackedBranch.Tip;
@@ -695,69 +648,41 @@ public static class ProjectGitService
         return false;
     }
 
-    private static string FormatGitHttpError(Exception ex, string workDir)
+    /// <summary>执行 git CLI 命令，由系统 credential manager 自动处理认证。</summary>
+    private static (bool Ok, string? Error) RunGitCliCommand(string workDir, string arguments, int timeoutMs = 300_000)
     {
-        var msg = ex.Message;
-        var remote = GetPrimaryRemoteUrl(workDir);
-        if (!string.IsNullOrWhiteSpace(remote))
+        try
         {
-            msg += "\n远端：" + remote;
-        }
-
-        if (msg.Contains("404", StringComparison.OrdinalIgnoreCase)
-            || msg.Contains("not found", StringComparison.OrdinalIgnoreCase))
-        {
-            msg += "\n提示：Fetch 返回 404 通常与 OAuth 无关（登录已成功）。请核对：① git remote -v 的地址在浏览器能否打开；② 仓库是否改名/迁移；③ 私有仓库时当前账号是否有权访问（GitHub 对无权限常返回 404 而非 403）。";
-        }
-
-        return msg;
-    }
-
-    private static FetchOptions CreateFetchOptions(GitHubCredentials? creds)
-    {
-        var fo = new FetchOptions();
-        if (creds != null && !string.IsNullOrWhiteSpace(creds.PersonalAccessToken))
-        {
-            fo.CredentialsProvider = (url, userFromUrl, _types) =>
-                new UsernamePasswordCredentials
+            using var p = new Process
+            {
+                StartInfo = new ProcessStartInfo
                 {
-                    Username = ResolveCredentialUserName(url, creds, userFromUrl),
-                    Password = creds.PersonalAccessToken
-                };
+                    FileName = "git",
+                    Arguments = arguments,
+                    WorkingDirectory = workDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                }
+            };
+            p.Start();
+            var stderr = p.StandardError.ReadToEnd();
+            var stdout = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(timeoutMs);
+            if (p.ExitCode != 0)
+            {
+                var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                detail = string.IsNullOrWhiteSpace(detail) ? $"退出码 {p.ExitCode}" : detail.Trim();
+                return (false, detail);
+            }
+
+            return (true, null);
         }
-
-        return fo;
-    }
-
-    private static PushOptions CreatePushOptions(GitHubCredentials? creds)
-    {
-        var po = new PushOptions();
-        if (creds != null && !string.IsNullOrWhiteSpace(creds.PersonalAccessToken))
+        catch (Exception ex)
         {
-            po.CredentialsProvider = (url, userFromUrl, _types) =>
-                new UsernamePasswordCredentials
-                {
-                    Username = ResolveCredentialUserName(url, creds, userFromUrl),
-                    Password = creds.PersonalAccessToken
-                };
+            return (false, "请确认已安装 Git 且 git 在 PATH 中。\n" + ex.Message);
         }
-
-        return po;
-    }
-
-    private static string ResolveCredentialUserName(string url, GitHubCredentials creds, string? userFromUrl)
-    {
-        if (!string.IsNullOrWhiteSpace(creds.UserName))
-        {
-            return creds.UserName.Trim();
-        }
-
-        if (url.Contains("github.com", StringComparison.OrdinalIgnoreCase))
-        {
-            return "x-access-token";
-        }
-
-        return string.IsNullOrWhiteSpace(userFromUrl) ? "git" : userFromUrl;
     }
 
     private static Signature BuildSignature(Repository repo)
