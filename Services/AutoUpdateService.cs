@@ -38,12 +38,13 @@ public static class AutoUpdateService
 {
     private const string TaggedReleaseApi = "https://api.github.com/repos/meowalive/VisualNovelEditor/releases/tags/Release";
     private const string ReleasePageUrl = "https://github.com/meowalive/VisualNovelEditor/releases/tag/Release";
+    private const string MirroredReleaseExeUrl = "https://gh-proxy.org/https://github.com/meowalive/VisualNovelEditor/releases/download/Release/VNEditor.exe";
     private const string ReleaseExeName = "VNEditor.exe";
     private const string DownloadedExeTempName = "VNEditor.update.download";
 
     public static string GetReleasePageUrl()
     {
-        return ReleasePageUrl;
+        return MirroredReleaseExeUrl;
     }
 
     public static async Task<UpdateCheckResult> CheckForUpdateAsync()
@@ -215,13 +216,23 @@ public static class AutoUpdateService
                 return new ReleaseAssetInfo
                 {
                     Name = name,
-                    BrowserDownloadUrl = downloadUrl,
+                    BrowserDownloadUrl = GetMirroredDownloadUrl(downloadUrl, name),
                     Sha256Digest = digest
                 };
             }
         }
 
         return null;
+    }
+
+    private static string GetMirroredDownloadUrl(string originalUrl, string assetName)
+    {
+        if (assetName.Equals(ReleaseExeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return MirroredReleaseExeUrl;
+        }
+
+        return originalUrl;
     }
 
     private static async Task DownloadFileAsync(HttpClient http, string url, string outputPath, IProgress<UpdateDownloadProgress>? progress = null)
