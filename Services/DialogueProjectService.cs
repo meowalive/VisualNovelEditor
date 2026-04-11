@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Text;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
@@ -10,7 +9,8 @@ namespace VNEditor.Services;
 
 public static class DialogueProjectService
 {
-    private const string BgMetaPrefix = "//VNEditor:BG=";
+    private const string LegacyBgMetaPrefix = "//VNEditor:BG=";
+    private static readonly string[] BackgroundColumnNames = ["Backround", "Background", "BackgroundPath"];
 
     /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue（与 .git 同级的是工程根）。</summary>
     public static string GetDialogueDataDir(string projectRoot) =>
@@ -152,11 +152,11 @@ public static class DialogueProjectService
 
         foreach (var line in scene.Lines)
         {
-            var baseScript = BuildScriptWithMetadata(line.BaseScript, line.BackgroundPath);
             var dataRow = new List<string>
             {
                 line.CsvId,
-                baseScript,
+                NormalizeScriptForExport(line.BaseScript),
+                line.BackgroundPath,
                 line.EndScript,
                 NormalizeRolesForExport(line.Roles, validRoleIds),
                 line.IsNarrator ? "TRUE" : "FALSE",
@@ -529,7 +529,7 @@ public static class DialogueProjectService
                     var rawBaseScript = GetCell(row, 1);
                     var (pureBaseScript, bg) = ExtractMetadataFromScript(rawBaseScript);
                     line.BaseScript = pureBaseScript;
-                    line.BackgroundPath = bg;
+                    line.BackgroundPath = GetBackgroundValue(row, header, bg);
                     line.EndScript = GetCellByColumn(row, header, "EndScript");
                     line.Roles = GetCellByColumn(row, header, "Roles");
                     line.IsNarrator = ToBool(GetCellByColumn(row, header, "IsNarrator"));
@@ -659,9 +659,9 @@ public static class DialogueProjectService
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
-            if (trimmed.StartsWith(BgMetaPrefix, StringComparison.Ordinal))
+            if (trimmed.StartsWith(LegacyBgMetaPrefix, StringComparison.Ordinal))
             {
-                bg = trimmed[BgMetaPrefix.Length..].Trim();
+                bg = trimmed[LegacyBgMetaPrefix.Length..].Trim();
                 continue;
             }
 
@@ -671,20 +671,9 @@ public static class DialogueProjectService
         return (string.Join(Environment.NewLine, pure).Trim(), bg);
     }
 
-    private static string BuildScriptWithMetadata(string baseScript, string bg)
+    private static string NormalizeScriptForExport(string baseScript)
     {
-        var builder = new StringBuilder();
-        if (!string.IsNullOrWhiteSpace(bg))
-        {
-            builder.AppendLine(BgMetaPrefix + bg.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(baseScript))
-        {
-            builder.Append(baseScript.Trim());
-        }
-
-        return builder.ToString();
+        return ExtractMetadataFromScript(baseScript).pureScript;
     }
 
     private static int FindColumn(string[] header, string name)
@@ -724,12 +713,26 @@ public static class DialogueProjectService
 
     private static string[] BuildDataHeader(int maxChoice)
     {
-        var cols = new List<string> { "Id", "BaseScript", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
+        var cols = new List<string> { "Id", "BaseScript", "Backround", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
         for (var i = 1; i <= maxChoice; i++)
         {
             cols.Add($"ChoiceScript{i}");
         }
         return cols.ToArray();
+    }
+
+    private static string GetBackgroundValue(string[] row, string[] header, string fallbackFromLegacyComment)
+    {
+        foreach (var columnName in BackgroundColumnNames)
+        {
+            var value = GetCellByColumn(row, header, columnName);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return fallbackFromLegacyComment;
     }
 
     private static string[] BuildDataDesc(int maxChoice)

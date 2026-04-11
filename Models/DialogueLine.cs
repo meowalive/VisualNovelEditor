@@ -31,7 +31,7 @@ public partial class DialogueLine : ObservableObject
     [ObservableProperty] private string choiceText4 = string.Empty;
     [ObservableProperty] private string choiceText4En = string.Empty;
     [ObservableProperty] private string choiceText4Ja = string.Empty;
-    // Editor-only metadata, serialized into BaseScript comments.
+    // Editor-only metadata stored in the data CSV.
     [ObservableProperty] private string backgroundPath = string.Empty;
     /// <summary>Git 拉取合并冲突已按远端解决时，标记需人工核对的行。</summary>
     [ObservableProperty] private bool hasGitSyncWarning;
