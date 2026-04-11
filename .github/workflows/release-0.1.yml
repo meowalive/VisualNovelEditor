@@ -16,7 +16,7 @@ concurrency:
 env:
   DOTNET_VERSION: 9.0.x
   PROJECT_PATH: VNEditor.csproj
-  RELEASE_TAG: 0.1
+  RELEASE_TAG: Release
   PUBLISH_DIR: artifacts/publish/win-x64
   RELEASE_DIR: artifacts/release
   RELEASE_ZIP: VNEditor-win-x64-release.zip
