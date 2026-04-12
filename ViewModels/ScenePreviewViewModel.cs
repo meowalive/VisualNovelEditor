@@ -1,8 +1,12 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VNEditor.Models;
@@ -18,8 +22,14 @@ public partial class ScenePreviewViewModel : ViewModelBase
     private readonly string _projectRoot;
     private readonly Dictionary<string, string> _roleCharacterImageMap;
     private readonly Dictionary<string, string> _roleNameMap;
+    private readonly Dictionary<string, double> _roleDefaultYMap;
+    private readonly Dictionary<string, double> _roleDefaultScaleMap;
+    private readonly PortraitVisualState[] _portraitStates = [new(), new()];
+    private readonly object _portraitStateSync = new();
     private int _playingIndex;
     private string _activeBackgroundPath = string.Empty;
+    private CancellationTokenSource? _visualScriptCts;
+    private CancellationTokenSource? _previewTypewriterCts;
 
     [ObservableProperty] private string windowTitle = "场景预览";
     [ObservableProperty] private Bitmap? previewBackground;
@@ -33,8 +43,19 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [ObservableProperty] private bool previewUseDualPortrait;
     [ObservableProperty] private Bitmap? previewSinglePortrait;
     [ObservableProperty] private bool previewSinglePortraitDim;
+    [ObservableProperty] private double previewPortrait1OffsetX;
+    [ObservableProperty] private double previewPortrait1OffsetY;
+    [ObservableProperty] private double previewPortrait1Scale = 1.0;
+    [ObservableProperty] private double previewPortrait2OffsetX;
+    [ObservableProperty] private double previewPortrait2OffsetY;
+    [ObservableProperty] private double previewPortrait2Scale = 1.0;
+    [ObservableProperty] private double previewSinglePortraitOffsetX;
+    [ObservableProperty] private double previewSinglePortraitOffsetY;
+    [ObservableProperty] private double previewSinglePortraitScale = 1.0;
     [ObservableProperty] private string previewSpeaker = "旁白";
     [ObservableProperty] private string previewText = string.Empty;
+    [ObservableProperty] private int previewVisibleCharacterCount = -1;
+    [ObservableProperty] private bool isPreviewTyping;
     [ObservableProperty] private string previewHint = "鼠标左键下一句";
     [ObservableProperty] private bool previewChoice1Visible;
     [ObservableProperty] private bool previewChoice2Visible;
@@ -53,7 +74,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
         string gameResourcesRoot,
         string projectRoot,
         Dictionary<string, string> roleCharacterImageMap,
-        Dictionary<string, string> roleNameMap)
+        Dictionary<string, string> roleNameMap,
+        Dictionary<string, double> roleDefaultYMap,
+        Dictionary<string, double> roleDefaultScaleMap)
     {
         _scene = scene;
         _resourcesRoot = resourcesRoot;
@@ -61,6 +84,8 @@ public partial class ScenePreviewViewModel : ViewModelBase
         _projectRoot = projectRoot;
         _roleCharacterImageMap = new Dictionary<string, string>(roleCharacterImageMap, StringComparer.OrdinalIgnoreCase);
         _roleNameMap = new Dictionary<string, string>(roleNameMap, StringComparer.OrdinalIgnoreCase);
+        _roleDefaultYMap = new Dictionary<string, double>(roleDefaultYMap, StringComparer.OrdinalIgnoreCase);
+        _roleDefaultScaleMap = new Dictionary<string, double>(roleDefaultScaleMap, StringComparer.OrdinalIgnoreCase);
         _playingIndex = 0;
         WindowTitle = $"场景预览 - {_scene.Name}";
         ApplyCurrentLine();
@@ -69,6 +94,11 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [RelayCommand]
     private void LeftClick()
     {
+        if (TryCompletePreviewTypewriter())
+        {
+            return;
+        }
+
         if (IsFinished)
         {
             return;
@@ -212,8 +242,10 @@ public partial class ScenePreviewViewModel : ViewModelBase
         }
 
         PreviewText = line.Text;
+        StartPreviewTypewriter(line.Text);
         SetPreviewBackground(line.BackgroundPath, keepWhenEmpty: true);
         SetPortraits(line.Roles, line.IsNarrator);
+        ApplyVisualCommands(line.BaseScript);
         SetupChoices(line);
         if (!PreviewChoice1Visible && !PreviewChoice2Visible && !PreviewChoice3Visible && !PreviewChoice4Visible)
         {
@@ -303,6 +335,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(role.id))
         {
+            ResetPortraitSlot(slot, null);
             SetPortrait(slot, null, false, false);
             return;
         }
@@ -310,6 +343,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         var path = ResolvePortraitPathByRoleId(role.id);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
+            ResetPortraitSlot(slot, null);
             SetPortrait(slot, null, false, false);
             return;
         }
@@ -317,10 +351,12 @@ public partial class ScenePreviewViewModel : ViewModelBase
         var bmp = LoadBitmapSafe(path);
         if (bmp == null)
         {
+            ResetPortraitSlot(slot, null);
             SetPortrait(slot, null, false, false);
             return;
         }
 
+        ResetPortraitSlot(slot, role.id);
         SetPortrait(slot, bmp, true, !role.isSpeaker);
     }
 
@@ -355,6 +391,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             PreviewSinglePortrait = null;
             PreviewSinglePortraitDim = false;
+            PreviewSinglePortraitOffsetX = 0;
+            PreviewSinglePortraitOffsetY = 0;
+            PreviewSinglePortraitScale = 1.0;
             return;
         }
 
@@ -362,16 +401,19 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             PreviewSinglePortrait = PreviewPortrait1;
             PreviewSinglePortraitDim = PreviewPortrait1Dim;
+            SyncSinglePortraitTransform(1);
         }
         else
         {
             PreviewSinglePortrait = PreviewPortrait2;
             PreviewSinglePortraitDim = PreviewPortrait2Dim;
+            SyncSinglePortraitTransform(2);
         }
     }
 
     private void ClearPortraits()
     {
+        CancelPendingVisualCommands();
         var old1 = PreviewPortrait1;
         var old2 = PreviewPortrait2;
         PreviewPortrait1 = null;
@@ -384,6 +426,20 @@ public partial class ScenePreviewViewModel : ViewModelBase
         PreviewUseDualPortrait = false;
         PreviewSinglePortrait = null;
         PreviewSinglePortraitDim = false;
+        PreviewPortrait1OffsetX = 0;
+        PreviewPortrait1OffsetY = 0;
+        PreviewPortrait1Scale = 1.0;
+        PreviewPortrait2OffsetX = 0;
+        PreviewPortrait2OffsetY = 0;
+        PreviewPortrait2Scale = 1.0;
+        PreviewSinglePortraitOffsetX = 0;
+        PreviewSinglePortraitOffsetY = 0;
+        PreviewSinglePortraitScale = 1.0;
+        lock (_portraitStateSync)
+        {
+            _portraitStates[0].Clear();
+            _portraitStates[1].Clear();
+        }
         old1?.Dispose();
         old2?.Dispose();
     }
@@ -431,6 +487,282 @@ public partial class ScenePreviewViewModel : ViewModelBase
         return _roleCharacterImageMap.TryGetValue(key, out var path)
             ? ResolveResourcePath(path)
             : string.Empty;
+    }
+
+    private void ResetPortraitSlot(int slot, string? roleId)
+    {
+        var normalizedRoleId = roleId?.Trim() ?? string.Empty;
+        var defaultY = string.IsNullOrWhiteSpace(normalizedRoleId) ? 0 : ResolveRoleDefaultY(normalizedRoleId);
+        var defaultScale = string.IsNullOrWhiteSpace(normalizedRoleId) ? 1.0 : ResolveRoleDefaultScale(normalizedRoleId);
+        lock (_portraitStateSync)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedRoleId))
+            {
+                _portraitStates[slot - 1].Clear();
+            }
+            else
+            {
+                _portraitStates[slot - 1].Reset(normalizedRoleId, defaultY, defaultScale);
+            }
+        }
+
+        ApplySlotTransform(slot, 0, defaultY, defaultScale);
+    }
+
+    private void ApplyVisualCommands(string? script)
+    {
+        CancelPendingVisualCommands();
+        var commands = VisualNovelScriptExecutorParser.ParsePortraitVisualCommands(script);
+        if (commands.Count == 0)
+        {
+            return;
+        }
+
+        _visualScriptCts = new CancellationTokenSource();
+        foreach (var command in commands)
+        {
+            _ = RunVisualCommandAsync(command, _visualScriptCts.Token);
+        }
+    }
+
+    private void CancelPendingVisualCommands()
+    {
+        _visualScriptCts?.Cancel();
+        _visualScriptCts?.Dispose();
+        _visualScriptCts = null;
+    }
+
+    private async Task RunVisualCommandAsync(PortraitVisualCommand command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (command.Delay > 0)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(command.Delay), cancellationToken);
+            }
+
+            var slot = Math.Clamp(command.Index, 1, 2);
+            if (!HasPortraitRole(slot))
+            {
+                return;
+            }
+
+            var startValue = GetVisualValue(slot, command.Type);
+            var targetValue = GetVisualTarget(slot, command);
+            if (command.Time <= 0)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => SetVisualValue(slot, command.Type, targetValue), DispatcherPriority.Render);
+                return;
+            }
+
+            var duration = TimeSpan.FromSeconds(command.Time);
+            var stopwatch = Stopwatch.StartNew();
+            while (stopwatch.Elapsed < duration)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var progress = Math.Clamp(stopwatch.Elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+                var value = Lerp(startValue, targetValue, progress);
+                await Dispatcher.UIThread.InvokeAsync(() => SetVisualValue(slot, command.Type, value), DispatcherPriority.Render);
+                await Task.Delay(16, cancellationToken);
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() => SetVisualValue(slot, command.Type, targetValue), DispatcherPriority.Render);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private bool HasPortraitRole(int slot)
+    {
+        lock (_portraitStateSync)
+        {
+            return !string.IsNullOrWhiteSpace(_portraitStates[slot - 1].RoleId);
+        }
+    }
+
+    private double GetVisualValue(int slot, PortraitVisualCommandType type)
+    {
+        lock (_portraitStateSync)
+        {
+            var state = _portraitStates[slot - 1];
+            return type switch
+            {
+                PortraitVisualCommandType.MoveX => state.X,
+                PortraitVisualCommandType.MoveY => state.Y,
+                PortraitVisualCommandType.Scale => state.Scale,
+                _ => 0
+            };
+        }
+    }
+
+    private double GetVisualTarget(int slot, PortraitVisualCommand command)
+    {
+        lock (_portraitStateSync)
+        {
+            var state = _portraitStates[slot - 1];
+            return command.Type switch
+            {
+                PortraitVisualCommandType.MoveX => command.Value,
+                PortraitVisualCommandType.MoveY => state.DefaultY + command.Value,
+                PortraitVisualCommandType.Scale => command.Value,
+                _ => command.Value
+            };
+        }
+    }
+
+    private void SetVisualValue(int slot, PortraitVisualCommandType type, double value)
+    {
+        double x;
+        double y;
+        double scale;
+        lock (_portraitStateSync)
+        {
+            var state = _portraitStates[slot - 1];
+            switch (type)
+            {
+                case PortraitVisualCommandType.MoveX:
+                    state.X = value;
+                    break;
+                case PortraitVisualCommandType.MoveY:
+                    state.Y = value;
+                    break;
+                case PortraitVisualCommandType.Scale:
+                    state.Scale = value;
+                    break;
+            }
+
+            x = state.X;
+            y = state.Y;
+            scale = state.Scale;
+        }
+
+        ApplySlotTransform(slot, x, y, scale);
+    }
+
+    private void ApplySlotTransform(int slot, double x, double y, double scale)
+    {
+        if (slot == 1)
+        {
+            PreviewPortrait1OffsetX = x;
+            PreviewPortrait1OffsetY = y;
+            PreviewPortrait1Scale = scale;
+        }
+        else
+        {
+            PreviewPortrait2OffsetX = x;
+            PreviewPortrait2OffsetY = y;
+            PreviewPortrait2Scale = scale;
+        }
+
+        SyncSinglePortraitTransform(PreviewPortrait1Visible ? 1 : 2);
+    }
+
+    private void SyncSinglePortraitTransform(int slot)
+    {
+        if (!PreviewUseSinglePortrait)
+        {
+            return;
+        }
+
+        if (slot == 1 && PreviewPortrait1Visible)
+        {
+            PreviewSinglePortraitOffsetX = PreviewPortrait1OffsetX;
+            PreviewSinglePortraitOffsetY = PreviewPortrait1OffsetY;
+            PreviewSinglePortraitScale = PreviewPortrait1Scale;
+        }
+        else if (slot == 2 && PreviewPortrait2Visible)
+        {
+            PreviewSinglePortraitOffsetX = PreviewPortrait2OffsetX;
+            PreviewSinglePortraitOffsetY = PreviewPortrait2OffsetY;
+            PreviewSinglePortraitScale = PreviewPortrait2Scale;
+        }
+    }
+
+    private double ResolveRoleDefaultY(string roleId)
+    {
+        if (_roleDefaultYMap.TryGetValue(roleId, out var direct))
+        {
+            return direct;
+        }
+
+        var key = roleId.StartsWith("role_", StringComparison.OrdinalIgnoreCase) ? roleId[5..] : roleId;
+        return _roleDefaultYMap.TryGetValue(key, out var fallback) ? fallback : 0;
+    }
+
+    private double ResolveRoleDefaultScale(string roleId)
+    {
+        if (_roleDefaultScaleMap.TryGetValue(roleId, out var direct))
+        {
+            return direct;
+        }
+
+        var key = roleId.StartsWith("role_", StringComparison.OrdinalIgnoreCase) ? roleId[5..] : roleId;
+        return _roleDefaultScaleMap.TryGetValue(key, out var fallback) ? fallback : 1.0;
+    }
+
+    private static double Lerp(double from, double to, double progress)
+    {
+        return from + ((to - from) * progress);
+    }
+
+    private void StartPreviewTypewriter(string? text)
+    {
+        CancelPendingPreviewTypewriter();
+        var totalVisibleCharacters = DialogueTextUtility.CountVisibleCharacters(text);
+        if (totalVisibleCharacters <= 0)
+        {
+            PreviewVisibleCharacterCount = -1;
+            IsPreviewTyping = false;
+            return;
+        }
+
+        PreviewVisibleCharacterCount = 0;
+        IsPreviewTyping = true;
+        _previewTypewriterCts = new CancellationTokenSource();
+        _ = RunPreviewTypewriterAsync(totalVisibleCharacters, _previewTypewriterCts.Token);
+    }
+
+    private async Task RunPreviewTypewriterAsync(int totalVisibleCharacters, CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (var i = 1; i <= totalVisibleCharacters; i++)
+            {
+                await Task.Delay(25, cancellationToken);
+                await Dispatcher.UIThread.InvokeAsync(() => PreviewVisibleCharacterCount = i, DispatcherPriority.Render);
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                PreviewVisibleCharacterCount = totalVisibleCharacters;
+                IsPreviewTyping = false;
+            }, DispatcherPriority.Render);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private bool TryCompletePreviewTypewriter()
+    {
+        if (!IsPreviewTyping)
+        {
+            return false;
+        }
+
+        var totalVisibleCharacters = DialogueTextUtility.CountVisibleCharacters(PreviewText);
+        CancelPendingPreviewTypewriter();
+        PreviewVisibleCharacterCount = totalVisibleCharacters <= 0 ? -1 : totalVisibleCharacters;
+        return true;
+    }
+
+    private void CancelPendingPreviewTypewriter()
+    {
+        _previewTypewriterCts?.Cancel();
+        _previewTypewriterCts?.Dispose();
+        _previewTypewriterCts = null;
+        IsPreviewTyping = false;
     }
 
     private string ResolveResourcePath(string? rawPath) =>
@@ -533,6 +865,8 @@ public partial class ScenePreviewViewModel : ViewModelBase
 
     private void EndPreview(string hint)
     {
+        CancelPendingVisualCommands();
+        CancelPendingPreviewTypewriter();
         IsFinished = true;
         HideChoices();
         PreviewHint = hint;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -10,13 +11,30 @@ namespace VNEditor.Services;
 
 public sealed record ScriptMethodDef(string Name, string? Alias, string Params, string LuaBody);
 
+public enum PortraitVisualCommandType
+{
+    MoveX = 0,
+    MoveY = 1,
+    Scale = 2
+}
+
+public readonly record struct PortraitVisualCommand(
+    PortraitVisualCommandType Type,
+    int Index,
+    double Value,
+    double Time,
+    double Delay);
+
 public static class LuaScriptRuntimeService
 {
     public static readonly ScriptMethodDef[] MethodDefs =
     {
-        new("ShowDialogue", "跳转",    "id",   """__vn_set_action("Jump", id)"""),
-        new("EndDialogue",  "结束",    "",     """__vn_set_action("EndDialogue", "")"""),
+        new("ShowDialogue", "跳转", "id", """__vn_set_action("Jump", id)"""),
+        new("EndDialogue", "结束", "", """__vn_set_action("EndDialogue", "")"""),
         new("HideDialogue", "隐藏对话框", "flag", "if flag == nil then flag = true end __vn_hide_dialogue = flag"),
+        new("DoMoveX", "移动X", "index, x, time, delay", """__vn_add_visual_command("MoveX", index, x, time, delay)"""),
+        new("DoMoveY", "移动Y", "index, x, time, delay", """__vn_add_visual_command("MoveY", index, x, time, delay)"""),
+        new("DoScale", "缩放", "index, x, time, delay", """__vn_add_visual_command("Scale", index, x, time, delay)"""),
     };
 
     private static readonly Regex InvocationRegex = new(
@@ -35,11 +53,13 @@ public static class LuaScriptRuntimeService
         sb.AppendLine("__vn_action_type = nil");
         sb.AppendLine("__vn_action_target = nil");
         sb.AppendLine("__vn_hide_dialogue = nil");
+        sb.AppendLine("__vn_visual_commands = \"\"");
         sb.AppendLine("local __vn_self = {}");
         sb.AppendLine("self = __vn_self");
         sb.AppendLine("VisualNovelScriptExecutor = __vn_self");
         sb.AppendLine("PlayerInfo = setmetatable({}, { __index = function(_, _) return function(...) return nil end end })");
         sb.AppendLine("local function __vn_set_action(t, target) if __vn_action_type == nil then __vn_action_type = t __vn_action_target = target end end");
+        sb.AppendLine("""local function __vn_add_visual_command(kind, index, value, time, delay) __vn_visual_commands = __vn_visual_commands .. kind .. "|" .. tostring(index or 1) .. "|" .. tostring(value or 0) .. "|" .. tostring(time or 0) .. "|" .. tostring(delay or 0) .. "\n" end""");
         foreach (var def in MethodDefs)
         {
             sb.AppendLine($"function {def.Name}({def.Params}) {def.LuaBody} end");
@@ -49,19 +69,20 @@ public static class LuaScriptRuntimeService
                 sb.AppendLine($"__vn_self[\"{def.Alias}\"] = {def.Name}");
             }
         }
+
         return sb.ToString();
     }
 
-    /// <summary>将脚本中的中文别名替换为对应英文方法名，使 Lua 解析器能正确处理。</summary>
     public static string NormalizeAliases(string script)
     {
         foreach (var def in MethodDefs)
         {
             if (!string.IsNullOrEmpty(def.Alias))
             {
-                script = script.Replace(def.Alias, def.Name);
+                script = script.Replace(def.Alias, def.Name, StringComparison.Ordinal);
             }
         }
+
         return script;
     }
 
@@ -77,7 +98,6 @@ public static class LuaScriptRuntimeService
         {
             using var state = LuaState.Create();
             state.OpenStandardLibraries();
-            // 仅做 Lua 语法编译检查，不执行用户脚本，避免 ShowDialogue 等运行时依赖报“未定义”。
             var normalizedScript = NormalizeAliases(VNLuaFormatter.Format(script));
             var wrapped = "function __vn_syntax_check__()\n" + normalizedScript + "\nend";
             _ = state.DoStringAsync(wrapped).GetAwaiter().GetResult();
@@ -136,7 +156,7 @@ public static class LuaScriptRuntimeService
             var actionTypeValue = state.Environment["__vn_action_type"];
             if (!actionTypeValue.TryRead<string>(out var actionType) || string.IsNullOrWhiteSpace(actionType))
             {
-                error = "脚本未调用 ShowDialogue/跳转 或 EndDialogue/结束，无法模拟";
+                error = "脚本未调用 ShowDialogue/跳转 或 EndDialogue/结束，无法模拟。";
                 return false;
             }
 
@@ -185,17 +205,54 @@ public static class LuaScriptRuntimeService
         }
     }
 
+    public static IReadOnlyList<PortraitVisualCommand> ExtractPortraitVisualCommands(string? script)
+    {
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return Array.Empty<PortraitVisualCommand>();
+        }
+
+        var normalizedScript = NormalizeAliases(VNLuaFormatter.Format(script));
+        try
+        {
+            using var state = LuaState.Create();
+            state.OpenStandardLibraries();
+            _ = state.DoStringAsync(Prelude + Environment.NewLine + normalizedScript).GetAwaiter().GetResult();
+
+            var commandsValue = state.Environment["__vn_visual_commands"];
+            if (!commandsValue.TryRead<string>(out var raw) || string.IsNullOrWhiteSpace(raw))
+            {
+                return Array.Empty<PortraitVisualCommand>();
+            }
+
+            return ParsePortraitVisualCommands(raw);
+        }
+        catch
+        {
+            return Array.Empty<PortraitVisualCommand>();
+        }
+    }
+
     private static string GetExceptionMessage(Exception ex)
     {
         var msg = ex?.Message;
         if (!string.IsNullOrWhiteSpace(msg))
+        {
             return msg.Trim();
+        }
+
         var inner = ex?.InnerException?.Message;
         if (!string.IsNullOrWhiteSpace(inner))
+        {
             return inner.Trim();
+        }
+
         var full = ex?.ToString();
         if (!string.IsNullOrWhiteSpace(full))
+        {
             return full.Trim();
+        }
+
         return "未知错误";
     }
 
@@ -236,5 +293,60 @@ public static class LuaScriptRuntimeService
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<PortraitVisualCommand> ParsePortraitVisualCommands(string raw)
+    {
+        var result = new List<PortraitVisualCommand>();
+        var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var line in lines)
+        {
+            var parts = line.Split('|');
+            if (parts.Length < 5 || !TryParsePortraitVisualCommandType(parts[0], out var type))
+            {
+                continue;
+            }
+
+            var index = ToInt(parts[1], 1);
+            var value = ToDouble(parts[2], 0);
+            var time = Math.Max(0, ToDouble(parts[3], 0));
+            var delay = Math.Max(0, ToDouble(parts[4], 0));
+            result.Add(new PortraitVisualCommand(type, Math.Clamp(index, 1, 2), value, time, delay));
+        }
+
+        return result;
+    }
+
+    private static bool TryParsePortraitVisualCommandType(string raw, out PortraitVisualCommandType type)
+    {
+        switch (raw)
+        {
+            case "MoveX":
+                type = PortraitVisualCommandType.MoveX;
+                return true;
+            case "MoveY":
+                type = PortraitVisualCommandType.MoveY;
+                return true;
+            case "Scale":
+                type = PortraitVisualCommandType.Scale;
+                return true;
+            default:
+                type = PortraitVisualCommandType.MoveX;
+                return false;
+        }
+    }
+
+    private static int ToInt(string value, int fallback)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
+            ? result
+            : fallback;
+    }
+
+    private static double ToDouble(string value, double fallback)
+    {
+        return double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var result)
+            ? result
+            : fallback;
     }
 }

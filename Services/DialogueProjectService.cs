@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.IO;
 using VNEditor.Models;
@@ -320,6 +321,8 @@ public static class DialogueProjectService
 
                         role.Avatar = GetCellByColumn(row, header, "Avatar");
                         role.CharacterImage = GetCellByColumn(row, header, "CharacterImage");
+                        role.DefaultY = GetDoubleByColumn(row, header, "DefaultY");
+                        role.DefaultScale = GetDoubleByColumn(row, header, "DefaultScale", 1.0);
                     }
                 }
             }
@@ -413,12 +416,19 @@ public static class DialogueProjectService
 
             var dataRows = new List<string[]>
             {
-                new[] { "Id", "Avatar", "CharacterImage" },
+                new[] { "Id", "Avatar", "CharacterImage", "DefaultY", "DefaultScale" },
                 new[] { "唯一标识", "头像路径", "立绘路径" }
             };
             foreach (var role in ordered)
             {
-                dataRows.Add(new[] { role.Id, role.Avatar, role.CharacterImage });
+                dataRows.Add(new[]
+                {
+                    role.Id,
+                    role.Avatar,
+                    role.CharacterImage,
+                    FormatDouble(role.DefaultY),
+                    FormatDouble(role.DefaultScale)
+                });
             }
 
             var textRows = new List<string[]>
@@ -703,6 +713,23 @@ public static class DialogueProjectService
     private static int ToInt(string value)
     {
         return int.TryParse(value, out var result) ? result : 0;
+    }
+
+    private static double GetDoubleByColumn(string[] row, string[] header, string column, double fallback = 0)
+    {
+        return ToDouble(GetCellByColumn(row, header, column), fallback);
+    }
+
+    private static double ToDouble(string value, double fallback = 0)
+    {
+        return double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var result)
+            ? result
+            : fallback;
+    }
+
+    private static string FormatDouble(double value)
+    {
+        return value.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
     private static bool ToBool(string value)

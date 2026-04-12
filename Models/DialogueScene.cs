@@ -20,6 +20,12 @@ public partial class DialogueScene : ObservableObject
     [ObservableProperty] private bool galleryUseSinglePortrait;
     [ObservableProperty] private bool galleryUseDualPortrait;
     [ObservableProperty] private bool gallerySinglePortraitDim;
+    [ObservableProperty] private double galleryPortrait1OffsetY;
+    [ObservableProperty] private double galleryPortrait2OffsetY;
+    [ObservableProperty] private double gallerySinglePortraitOffsetY;
+    [ObservableProperty] private double galleryPortrait1Scale = 1.0;
+    [ObservableProperty] private double galleryPortrait2Scale = 1.0;
+    [ObservableProperty] private double gallerySinglePortraitScale = 1.0;
 
     public ObservableCollection<DialogueLine> Lines { get; } = new();
 

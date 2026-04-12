@@ -28,4 +28,9 @@ public static class VisualNovelScriptExecutorParser
     {
         return LuaScriptRuntimeService.ExtractHideDialogue(script);
     }
+
+    public static IReadOnlyList<PortraitVisualCommand> ParsePortraitVisualCommands(string? script)
+    {
+        return LuaScriptRuntimeService.ExtractPortraitVisualCommands(script);
+    }
 }

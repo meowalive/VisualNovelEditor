@@ -30,30 +30,54 @@
             <Image Source="{Binding PreviewBackground}" Stretch="UniformToFill"/>
 
             <Grid VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseSinglePortrait}">
-                <Image Source="{Binding PreviewSinglePortrait}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                <Border Background="#33000000" IsVisible="{Binding PreviewSinglePortraitDim}">
-                    <Border.OpacityMask>
-                        <ImageBrush Source="{Binding PreviewSinglePortrait}" Stretch="Uniform"/>
-                    </Border.OpacityMask>
-                </Border>
+                <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="{Binding PreviewSinglePortraitScale}" ScaleY="{Binding PreviewSinglePortraitScale}"/>
+                            <TranslateTransform X="{Binding PreviewSinglePortraitOffsetX}" Y="{Binding PreviewSinglePortraitOffsetY}"/>
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+                    <Image Source="{Binding PreviewSinglePortrait}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                    <Border Background="#33000000" IsVisible="{Binding PreviewSinglePortraitDim}">
+                        <Border.OpacityMask>
+                            <ImageBrush Source="{Binding PreviewSinglePortrait}" Stretch="Uniform"/>
+                        </Border.OpacityMask>
+                    </Border>
+                </Grid>
             </Grid>
 
             <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseDualPortrait}">
                 <Grid Grid.Column="0" IsVisible="{Binding PreviewPortrait1Visible}">
-                    <Image Source="{Binding PreviewPortrait1}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                    <Border Background="#33000000" IsVisible="{Binding PreviewPortrait1Dim}">
-                        <Border.OpacityMask>
-                            <ImageBrush Source="{Binding PreviewPortrait1}" Stretch="Uniform"/>
-                        </Border.OpacityMask>
-                    </Border>
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                        <Grid.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform ScaleX="{Binding PreviewPortrait1Scale}" ScaleY="{Binding PreviewPortrait1Scale}"/>
+                                <TranslateTransform X="{Binding PreviewPortrait1OffsetX}" Y="{Binding PreviewPortrait1OffsetY}"/>
+                            </TransformGroup>
+                        </Grid.RenderTransform>
+                        <Image Source="{Binding PreviewPortrait1}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                        <Border Background="#33000000" IsVisible="{Binding PreviewPortrait1Dim}">
+                            <Border.OpacityMask>
+                                <ImageBrush Source="{Binding PreviewPortrait1}" Stretch="Uniform"/>
+                            </Border.OpacityMask>
+                        </Border>
+                    </Grid>
                 </Grid>
                 <Grid Grid.Column="1" IsVisible="{Binding PreviewPortrait2Visible}">
-                    <Image Source="{Binding PreviewPortrait2}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                    <Border Background="#33000000" IsVisible="{Binding PreviewPortrait2Dim}">
-                        <Border.OpacityMask>
-                            <ImageBrush Source="{Binding PreviewPortrait2}" Stretch="Uniform"/>
-                        </Border.OpacityMask>
-                    </Border>
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                        <Grid.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform ScaleX="{Binding PreviewPortrait2Scale}" ScaleY="{Binding PreviewPortrait2Scale}"/>
+                                <TranslateTransform X="{Binding PreviewPortrait2OffsetX}" Y="{Binding PreviewPortrait2OffsetY}"/>
+                            </TransformGroup>
+                        </Grid.RenderTransform>
+                        <Image Source="{Binding PreviewPortrait2}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                        <Border Background="#33000000" IsVisible="{Binding PreviewPortrait2Dim}">
+                            <Border.OpacityMask>
+                                <ImageBrush Source="{Binding PreviewPortrait2}" Stretch="Uniform"/>
+                            </Border.OpacityMask>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Grid>
 
@@ -67,7 +91,7 @@
                     IsVisible="{Binding PreviewDialogueBoxVisible}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="{Binding PreviewSpeaker}" Foreground="White" FontSize="28" FontWeight="Bold"/>
-                    <controls:RichDialogueTextBlock DialogueText="{Binding PreviewText}" Foreground="White" FontSize="24" TextWrapping="Wrap"/>
+                    <controls:RichDialogueTextBlock DialogueText="{Binding PreviewText}" VisibleCharacterCount="{Binding PreviewVisibleCharacterCount}" Foreground="White" FontSize="24" TextWrapping="Wrap"/>
 
                     <StackPanel Spacing="6" Margin="0,8,0,0">
                         <Button IsVisible="{Binding PreviewChoice1Visible}" Content="{Binding PreviewChoice1Text}" Command="{Binding SelectChoice1Command}" FontSize="20"/>

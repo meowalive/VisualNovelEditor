@@ -12,6 +12,8 @@ public partial class RoleEntry : ObservableObject
     [ObservableProperty] private string nameJa = string.Empty;
     [ObservableProperty] private string avatar = string.Empty;
     [ObservableProperty] private string characterImage = string.Empty;
+    [ObservableProperty] private double defaultY;
+    [ObservableProperty] private double defaultScale = 1.0;
 
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Id : $"{Name} ({Id})";
 

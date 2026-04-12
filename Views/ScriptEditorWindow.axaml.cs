@@ -64,6 +64,42 @@ public partial class ScriptEditorWindow : Window
             "参数: flag (boolean) — true 隐藏 / false 显示",
             "作用: 隐藏或显示对话框（同 HideDialogue）"
         ),
+        new LuaCompletionData(
+            "DoMoveX",
+            "DoMoveX(index, x, time, delay)",
+            "参数: index (1-2), x (number), time (秒), delay (秒)",
+            "作用: 让指定立绘平滑移动到目标 X 偏移"
+        ),
+        new LuaCompletionData(
+            "DoMoveY",
+            "DoMoveY(index, x, time, delay)",
+            "参数: index (1-2), x (number), time (秒), delay (秒)",
+            "作用: 让指定立绘平滑移动到 DefaultY + x"
+        ),
+        new LuaCompletionData(
+            "DoScale",
+            "DoScale(index, x, time, delay)",
+            "参数: index (1-2), x (number), time (秒), delay (秒)",
+            "作用: 让指定立绘平滑缩放到目标倍率"
+        ),
+        new LuaCompletionData(
+            "移动X",
+            "移动X(index, x, time, delay)",
+            "参数: index (1-2), x (number), time (秒), delay (秒)",
+            "作用: DoMoveX 的中文别名"
+        ),
+        new LuaCompletionData(
+            "移动Y",
+            "移动Y(index, x, time, delay)",
+            "参数: index (1-2), x (number), time (秒), delay (秒)",
+            "作用: DoMoveY 的中文别名"
+        ),
+        new LuaCompletionData(
+            "缩放",
+            "缩放(index, x, time, delay)",
+            "参数: index (1-2), x (number), time (秒), delay (秒)",
+            "作用: DoScale 的中文别名"
+        ),
     };
 
     public string ScriptText { get; private set; } = string.Empty;
@@ -315,6 +351,9 @@ public partial class ScriptEditorWindow : Window
             new() { Title = "结束对话", Code = "结束();" },
             new() { Title = "隐藏对话框", Code = "隐藏对话框(true);" },
             new() { Title = "显示对话框", Code = "隐藏对话框(false);" },
+            new() { Title = "立绘移动X", Code = "DoMoveX(1, 120, 0.35, 0);" },
+            new() { Title = "立绘移动Y", Code = "DoMoveY(1, -80, 0.35, 0);" },
+            new() { Title = "立绘缩放", Code = "DoScale(1, 0.9, 0.35, 0);" },
         };
     }
 }

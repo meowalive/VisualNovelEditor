@@ -12,6 +12,8 @@ public class RichDialogueTextBlock : TextBlock
 {
     public static readonly StyledProperty<string?> DialogueTextProperty =
         AvaloniaProperty.Register<RichDialogueTextBlock, string?>(nameof(DialogueText), string.Empty);
+    public static readonly StyledProperty<int> VisibleCharacterCountProperty =
+        AvaloniaProperty.Register<RichDialogueTextBlock, int>(nameof(VisibleCharacterCount), -1);
 
     private static readonly Regex TagRegex = new("<[^>]+>", RegexOptions.Compiled);
 
@@ -21,9 +23,16 @@ public class RichDialogueTextBlock : TextBlock
         set => SetValue(DialogueTextProperty, value);
     }
 
+    public int VisibleCharacterCount
+    {
+        get => GetValue(VisibleCharacterCountProperty);
+        set => SetValue(VisibleCharacterCountProperty, value);
+    }
+
     static RichDialogueTextBlock()
     {
         DialogueTextProperty.Changed.AddClassHandler<RichDialogueTextBlock>((x, _) => x.RebuildInlines());
+        VisibleCharacterCountProperty.Changed.AddClassHandler<RichDialogueTextBlock>((x, _) => x.RebuildInlines());
     }
 
     private sealed class StyleState
@@ -49,6 +58,10 @@ public class RichDialogueTextBlock : TextBlock
             return;
         }
 
+        var remainingVisibleCharacters = VisibleCharacterCount < 0
+            ? int.MaxValue
+            : VisibleCharacterCount;
+
         var stateStack = new Stack<StyleState>();
         var state = new StyleState
         {
@@ -63,7 +76,11 @@ public class RichDialogueTextBlock : TextBlock
         {
             if (match.Index > last)
             {
-                AppendText(text[last..match.Index], state);
+                remainingVisibleCharacters -= AppendText(text[last..match.Index], state, remainingVisibleCharacters);
+                if (remainingVisibleCharacters <= 0)
+                {
+                    return;
+                }
             }
 
             var rawTag = match.Value.Trim();
@@ -135,47 +152,72 @@ public class RichDialogueTextBlock : TextBlock
 
         if (last < text.Length)
         {
-            AppendText(text[last..], state);
+            _ = AppendText(text[last..], state, remainingVisibleCharacters);
         }
     }
 
-    private void AppendText(string content, StyleState state)
+    private int AppendText(string content, StyleState state, int remainingVisibleCharacters)
+    {
+        if (string.IsNullOrEmpty(content) || remainingVisibleCharacters <= 0)
+        {
+            return 0;
+        }
+
+        var normalized = content.Replace("\r\n", "\n");
+        var consumed = 0;
+        var start = 0;
+        for (var i = 0; i < normalized.Length && remainingVisibleCharacters > 0; i++)
+        {
+            if (normalized[i] == '\n')
+            {
+                AppendRun(normalized[start..i], state);
+                Inlines?.Add(new LineBreak());
+                start = i + 1;
+                consumed++;
+                remainingVisibleCharacters--;
+                continue;
+            }
+
+            consumed++;
+            remainingVisibleCharacters--;
+            if (remainingVisibleCharacters == 0)
+            {
+                AppendRun(normalized[start..(i + 1)], state);
+                return consumed;
+            }
+        }
+
+        if (start < normalized.Length && remainingVisibleCharacters > 0)
+        {
+            AppendRun(normalized[start..], state);
+        }
+
+        return consumed;
+    }
+
+    private void AppendRun(string content, StyleState state)
     {
         if (string.IsNullOrEmpty(content))
         {
             return;
         }
 
-        var parts = content.Replace("\r\n", "\n").Split('\n');
-        for (var i = 0; i < parts.Length; i++)
+        var run = new Run(content)
         {
-            if (parts[i].Length > 0)
-            {
-                var run = new Run(parts[i])
-                {
-                    FontWeight = state.Weight,
-                    FontStyle = state.Style
-                };
-                if (state.Foreground != null)
-                {
-                    run.Foreground = state.Foreground;
-                }
-
-                if (state.Size.HasValue && state.Size.Value > 0)
-                {
-                    run.FontSize = state.Size.Value;
-                }
-
-                var inlines = Inlines;
-                if (inlines != null) inlines.Add(run);
-            }
-
-            if (i < parts.Length - 1)
-            {
-                var inlines = Inlines;
-                if (inlines != null) inlines.Add(new LineBreak());
-            }
+            FontWeight = state.Weight,
+            FontStyle = state.Style
+        };
+        if (state.Foreground != null)
+        {
+            run.Foreground = state.Foreground;
         }
+
+        if (state.Size.HasValue && state.Size.Value > 0)
+        {
+            run.FontSize = state.Size.Value;
+        }
+
+        Inlines?.Add(run);
     }
 
     private static IBrush? ParseColorBrush(string raw)

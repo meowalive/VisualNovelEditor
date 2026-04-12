@@ -106,29 +106,53 @@
                                                     <Grid Width="360" Height="202">
                                                         <Image Source="{Binding GalleryBackground}" Stretch="UniformToFill"/>
                                                         <Grid VerticalAlignment="Stretch" IsVisible="{Binding GalleryUseSinglePortrait}">
-                                                            <Image Source="{Binding GallerySinglePortrait}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                                                            <Border Background="#33000000" IsVisible="{Binding GallerySinglePortraitDim}">
-                                                                <Border.OpacityMask>
-                                                                    <ImageBrush Source="{Binding GallerySinglePortrait}" Stretch="Uniform"/>
-                                                                </Border.OpacityMask>
-                                                            </Border>
-                                                        </Grid>
-                                                        <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding GalleryUseDualPortrait}">
-                                                            <Grid Grid.Column="0" IsVisible="{Binding GalleryPortrait1Visible}">
-                                                                <Image Source="{Binding GalleryPortrait1}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                                                                <Border Background="#33000000" IsVisible="{Binding GalleryPortrait1Dim}">
+                                                            <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                                                                <Grid.RenderTransform>
+                                                                    <TransformGroup>
+                                                                        <ScaleTransform ScaleX="{Binding GallerySinglePortraitScale}" ScaleY="{Binding GallerySinglePortraitScale}"/>
+                                                                        <TranslateTransform Y="{Binding GallerySinglePortraitOffsetY}"/>
+                                                                    </TransformGroup>
+                                                                </Grid.RenderTransform>
+                                                                <Image Source="{Binding GallerySinglePortrait}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                                                                <Border Background="#33000000" IsVisible="{Binding GallerySinglePortraitDim}">
                                                                     <Border.OpacityMask>
-                                                                        <ImageBrush Source="{Binding GalleryPortrait1}" Stretch="Uniform"/>
+                                                                        <ImageBrush Source="{Binding GallerySinglePortrait}" Stretch="Uniform"/>
                                                                     </Border.OpacityMask>
                                                                 </Border>
                                                             </Grid>
+                                                        </Grid>
+                                                        <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding GalleryUseDualPortrait}">
+                                                            <Grid Grid.Column="0" IsVisible="{Binding GalleryPortrait1Visible}">
+                                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                                                                    <Grid.RenderTransform>
+                                                                        <TransformGroup>
+                                                                            <ScaleTransform ScaleX="{Binding GalleryPortrait1Scale}" ScaleY="{Binding GalleryPortrait1Scale}"/>
+                                                                            <TranslateTransform Y="{Binding GalleryPortrait1OffsetY}"/>
+                                                                        </TransformGroup>
+                                                                    </Grid.RenderTransform>
+                                                                    <Image Source="{Binding GalleryPortrait1}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                                                                    <Border Background="#33000000" IsVisible="{Binding GalleryPortrait1Dim}">
+                                                                        <Border.OpacityMask>
+                                                                            <ImageBrush Source="{Binding GalleryPortrait1}" Stretch="Uniform"/>
+                                                                        </Border.OpacityMask>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Grid>
                                                             <Grid Grid.Column="1" IsVisible="{Binding GalleryPortrait2Visible}">
-                                                                <Image Source="{Binding GalleryPortrait2}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                                                                <Border Background="#33000000" IsVisible="{Binding GalleryPortrait2Dim}">
-                                                                    <Border.OpacityMask>
-                                                                        <ImageBrush Source="{Binding GalleryPortrait2}" Stretch="Uniform"/>
-                                                                    </Border.OpacityMask>
-                                                                </Border>
+                                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                                                                    <Grid.RenderTransform>
+                                                                        <TransformGroup>
+                                                                            <ScaleTransform ScaleX="{Binding GalleryPortrait2Scale}" ScaleY="{Binding GalleryPortrait2Scale}"/>
+                                                                            <TranslateTransform Y="{Binding GalleryPortrait2OffsetY}"/>
+                                                                        </TransformGroup>
+                                                                    </Grid.RenderTransform>
+                                                                    <Image Source="{Binding GalleryPortrait2}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                                                                    <Border Background="#33000000" IsVisible="{Binding GalleryPortrait2Dim}">
+                                                                        <Border.OpacityMask>
+                                                                            <ImageBrush Source="{Binding GalleryPortrait2}" Stretch="Uniform"/>
+                                                                        </Border.OpacityMask>
+                                                                    </Border>
+                                                                </Grid>
                                                             </Grid>
                                                         </Grid>
                                                         <Border VerticalAlignment="Bottom"
@@ -236,35 +260,59 @@
                                     <Grid>
                                         <Image Source="{Binding PreviewBackground}" Stretch="UniformToFill"/>
                                         <Grid VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseSinglePortrait}">
-                                            <Image Source="{Binding PreviewSinglePortrait}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                                            <Border Background="#33000000" IsVisible="{Binding PreviewSinglePortraitDim}">
-                                                <Border.OpacityMask>
-                                                    <ImageBrush Source="{Binding PreviewSinglePortrait}" Stretch="Uniform"/>
-                                                </Border.OpacityMask>
-                                            </Border>
-                                        </Grid>
-                                        <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseDualPortrait}">
-                                            <Grid Grid.Column="0" IsVisible="{Binding PreviewPortrait1Visible}">
-                                                <Image Source="{Binding PreviewPortrait1}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                                                <Border Background="#33000000" IsVisible="{Binding PreviewPortrait1Dim}">
+                                            <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                                                <Grid.RenderTransform>
+                                                    <TransformGroup>
+                                                        <ScaleTransform ScaleX="{Binding PreviewSinglePortraitScale}" ScaleY="{Binding PreviewSinglePortraitScale}"/>
+                                                        <TranslateTransform X="{Binding PreviewSinglePortraitOffsetX}" Y="{Binding PreviewSinglePortraitOffsetY}"/>
+                                                    </TransformGroup>
+                                                </Grid.RenderTransform>
+                                                <Image Source="{Binding PreviewSinglePortrait}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                                                <Border Background="#33000000" IsVisible="{Binding PreviewSinglePortraitDim}">
                                                     <Border.OpacityMask>
-                                                        <ImageBrush Source="{Binding PreviewPortrait1}" Stretch="Uniform"/>
+                                                        <ImageBrush Source="{Binding PreviewSinglePortrait}" Stretch="Uniform"/>
                                                     </Border.OpacityMask>
                                                 </Border>
                                             </Grid>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseDualPortrait}">
+                                            <Grid Grid.Column="0" IsVisible="{Binding PreviewPortrait1Visible}">
+                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                                                    <Grid.RenderTransform>
+                                                        <TransformGroup>
+                                                            <ScaleTransform ScaleX="{Binding PreviewPortrait1Scale}" ScaleY="{Binding PreviewPortrait1Scale}"/>
+                                                            <TranslateTransform X="{Binding PreviewPortrait1OffsetX}" Y="{Binding PreviewPortrait1OffsetY}"/>
+                                                        </TransformGroup>
+                                                    </Grid.RenderTransform>
+                                                    <Image Source="{Binding PreviewPortrait1}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                                                    <Border Background="#33000000" IsVisible="{Binding PreviewPortrait1Dim}">
+                                                        <Border.OpacityMask>
+                                                            <ImageBrush Source="{Binding PreviewPortrait1}" Stretch="Uniform"/>
+                                                        </Border.OpacityMask>
+                                                    </Border>
+                                                </Grid>
+                                            </Grid>
                                             <Grid Grid.Column="1" IsVisible="{Binding PreviewPortrait2Visible}">
-                                                <Image Source="{Binding PreviewPortrait2}" Stretch="Uniform" HorizontalAlignment="Center"/>
-                                                <Border Background="#33000000" IsVisible="{Binding PreviewPortrait2Dim}">
-                                                    <Border.OpacityMask>
-                                                        <ImageBrush Source="{Binding PreviewPortrait2}" Stretch="Uniform"/>
-                                                    </Border.OpacityMask>
-                                                </Border>
+                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
+                                                    <Grid.RenderTransform>
+                                                        <TransformGroup>
+                                                            <ScaleTransform ScaleX="{Binding PreviewPortrait2Scale}" ScaleY="{Binding PreviewPortrait2Scale}"/>
+                                                            <TranslateTransform X="{Binding PreviewPortrait2OffsetX}" Y="{Binding PreviewPortrait2OffsetY}"/>
+                                                        </TransformGroup>
+                                                    </Grid.RenderTransform>
+                                                    <Image Source="{Binding PreviewPortrait2}" Stretch="Uniform" HorizontalAlignment="Center"/>
+                                                    <Border Background="#33000000" IsVisible="{Binding PreviewPortrait2Dim}">
+                                                        <Border.OpacityMask>
+                                                            <ImageBrush Source="{Binding PreviewPortrait2}" Stretch="Uniform"/>
+                                                        </Border.OpacityMask>
+                                                    </Border>
+                                                </Grid>
                                             </Grid>
                                         </Grid>
                                         <Border VerticalAlignment="Bottom" Background="#E6191A1E" BorderBrush="#CCFFFFFF" BorderThickness="4" CornerRadius="18" Padding="24" Margin="18" IsVisible="{Binding PreviewDialogueBoxVisible}">
                                             <StackPanel Spacing="4">
                                                 <TextBlock Text="{Binding PreviewSpeaker}" FontWeight="Bold" FontSize="44" Foreground="White"/>
-                                                <controls:RichDialogueTextBlock DialogueText="{Binding PreviewText}" TextWrapping="Wrap" Foreground="White" FontSize="40"/>
+                                                <controls:RichDialogueTextBlock DialogueText="{Binding PreviewText}" VisibleCharacterCount="{Binding PreviewVisibleCharacterCount}" TextWrapping="Wrap" Foreground="White" FontSize="40"/>
                                                 <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding PreviewChoice1Visible}">
                                                     <Button Content="{Binding PreviewChoice1Text}" Command="{Binding SelectPreviewChoice1Command}" FontSize="30"/>
                                                 </StackPanel>
@@ -522,7 +570,7 @@
                             CornerRadius="10"
                             Padding="8"
                             IsEnabled="{Binding RoleEditingEnabled}">
-                        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
                             <TextBlock Text="分类" Grid.Row="0" Grid.Column="0"/>
                             <ComboBox Grid.Row="0" Grid.Column="1"
                                       ItemsSource="{Binding RoleCategories}"
@@ -541,6 +589,10 @@
                             <TextBox Text="{Binding SelectedRoleEntry.Avatar, Mode=TwoWay}" Grid.Row="6" Grid.Column="1"/>
                             <TextBlock Text="CharacterImage路径" Grid.Row="7" Grid.Column="0"/>
                             <TextBox Text="{Binding SelectedRoleEntry.CharacterImage, Mode=TwoWay}" Grid.Row="7" Grid.Column="1"/>
+                            <TextBlock Text="DefaultY" Grid.Row="8" Grid.Column="0"/>
+                            <TextBox Text="{Binding SelectedRoleEntry.DefaultY, Mode=TwoWay}" Grid.Row="8" Grid.Column="1"/>
+                            <TextBlock Text="DefaultScale" Grid.Row="9" Grid.Column="0"/>
+                            <TextBox Text="{Binding SelectedRoleEntry.DefaultScale, Mode=TwoWay}" Grid.Row="9" Grid.Column="1"/>
                         </Grid>
                     </Border>
                 </Grid>
