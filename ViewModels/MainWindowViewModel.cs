@@ -869,7 +869,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (e.PropertyName == nameof(RoleEntry.ImageLib))
         {
-            RefreshRoleMapsAndOptions(rebuildImageOptions: true);
+            RefreshRoleMapsAndOptions(rebuildImageOptions: true, refreshAllScenePreviews: false);
+            RefreshActiveRolePreviews();
             return;
         }
 
@@ -878,12 +879,19 @@ public partial class MainWindowViewModel : ViewModelBase
             || e.PropertyName == nameof(RoleEntry.DefaultY)
             || e.PropertyName == nameof(RoleEntry.DefaultScale))
         {
-            RefreshRoleMapsAndOptions(rebuildImageOptions: false);
+            RefreshRoleMapsAndOptions(
+                rebuildImageOptions: false,
+                refreshAllScenePreviews: false,
+                refreshSelectedRoleEntryImageOptions: false);
+            RefreshActiveRolePreviews();
             return;
         }
     }
 
-    private void RefreshRoleMapsAndOptions(bool rebuildImageOptions = true)
+    private void RefreshRoleMapsAndOptions(
+        bool rebuildImageOptions = true,
+        bool refreshAllScenePreviews = true,
+        bool refreshSelectedRoleEntryImageOptions = true)
     {
         _roleCharacterImageMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var previousImageOptionsMap = _roleImageOptionsMap;
@@ -952,8 +960,24 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         SyncRoleSelectorsFromLine();
-        RefreshRoleEntryImageOptions();
-        RefreshAllScenePreviews();
+        if (refreshSelectedRoleEntryImageOptions)
+        {
+            RefreshRoleEntryImageOptions();
+        }
+        if (refreshAllScenePreviews)
+        {
+            RefreshAllScenePreviews();
+        }
+    }
+
+    private void RefreshActiveRolePreviews()
+    {
+        if (SelectedScene != null)
+        {
+            RefreshScenePreview(SelectedScene);
+        }
+
+        UpdatePreview();
     }
 
     private List<ImageOption> BuildImageOptionsForRole(RoleEntry role)
@@ -1109,7 +1133,11 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        SelectedRoleEntry.CharacterImage = SelectedRoleEntryImageOption?.Path ?? string.Empty;
+        var nextPath = SelectedRoleEntryImageOption?.Path ?? string.Empty;
+        if (!string.Equals(SelectedRoleEntry.CharacterImage, nextPath, StringComparison.Ordinal))
+        {
+            SelectedRoleEntry.CharacterImage = nextPath;
+        }
     }
 
     private void UpdateLineRoleImagesFromSelectors()

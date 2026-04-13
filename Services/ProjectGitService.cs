@@ -195,19 +195,41 @@ public static class ProjectGitService
         string gitCliArguments)
     {
         var bundled = FindBundledGitLfsExecutable();
-        string fileName;
-        string arguments;
-        if (bundled != null)
+        if (!string.IsNullOrWhiteSpace(bundled))
         {
-            fileName = bundled;
-            arguments = bundledArguments;
-        }
-        else
-        {
-            fileName = "git";
-            arguments = gitCliArguments;
+            var bundledResult = TryRunProcess(repoRoot, bundled, bundledArguments);
+            if (bundledResult.Ok)
+            {
+                return (true, null);
+            }
+
+            if (!bundledResult.StartFailed)
+            {
+                return (false, bundledResult.Error);
+            }
         }
 
+        var cliResult = TryRunProcess(repoRoot, "git", gitCliArguments);
+        if (cliResult.Ok)
+        {
+            return (true, null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(bundled) && cliResult.StartFailed)
+        {
+            return (false,
+                $"无法执行：{bundled}\n{cliResult.Error}");
+        }
+
+        return (false, cliResult.Error);
+    }
+
+    private static (bool Ok, bool StartFailed, string? Error) TryRunProcess(
+        string workingDirectory,
+        string fileName,
+        string arguments,
+        int timeoutMs = 300_000)
+    {
         try
         {
             using var p = new Process
@@ -216,7 +238,7 @@ public static class ProjectGitService
                 {
                     FileName = fileName,
                     Arguments = arguments,
-                    WorkingDirectory = repoRoot,
+                    WorkingDirectory = workingDirectory,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -226,22 +248,22 @@ public static class ProjectGitService
             p.Start();
             var stderr = p.StandardError.ReadToEnd();
             var stdout = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(300_000);
+            p.WaitForExit(timeoutMs);
             if (p.ExitCode != 0)
             {
                 var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
                 detail = string.IsNullOrWhiteSpace(detail) ? $"退出码 {p.ExitCode}" : detail.Trim();
-                return (false, detail);
+                return (false, false, detail);
             }
 
-            return (true, null);
+            return (true, false, null);
         }
         catch (Exception ex)
         {
-            var hint = bundled != null
-                ? $"无法执行：{bundled}"
-                : "请确认已安装 Git 与 Git LFS，或将 git-lfs.exe 放在程序目录，且 git 在 PATH 中";
-            return (false, hint + "\n" + ex.Message);
+            var hint = string.Equals(fileName, "git", StringComparison.OrdinalIgnoreCase)
+                ? "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中"
+                : $"无法执行：{fileName}";
+            return (false, true, hint + "\n" + ex.Message);
         }
     }
 
