@@ -245,7 +245,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         PreviewText = line.Text;
         StartPreviewTypewriter(line.Text, animate: PreviewDialogueBoxVisible);
         SetPreviewBackground(line.BackgroundPath, keepWhenEmpty: true);
-        SetPortraits(line.Roles, line.IsNarrator);
+        SetPortraits(line);
         ApplyVisualCommands(line.BaseScript);
         SetupChoices(line);
         if (!PreviewChoice1Visible && !PreviewChoice2Visible && !PreviewChoice3Visible && !PreviewChoice4Visible)
@@ -322,13 +322,13 @@ public partial class ScenePreviewViewModel : ViewModelBase
         oldBg?.Dispose();
     }
 
-    private void SetPortraits(string rolesRaw, bool isNarrator)
+    private void SetPortraits(DialogueLine line)
     {
-        var roles = ParseRoles(rolesRaw);
+        var roles = ParseRoles(line.Roles);
         if (roles.Count == 0)
         {
             ClearPortraits();
-            PreviewSpeaker = isNarrator ? string.Empty : "旁白";
+            PreviewSpeaker = line.IsNarrator ? string.Empty : "旁白";
             return;
         }
 
@@ -337,13 +337,13 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             speakerId = roles[0].id;
         }
-        PreviewSpeaker = isNarrator ? string.Empty : ResolveRoleName(speakerId);
+        PreviewSpeaker = line.IsNarrator ? string.Empty : ResolveRoleName(speakerId);
 
-        SetPortraitSlot(1, roles.ElementAtOrDefault(0));
-        SetPortraitSlot(2, roles.ElementAtOrDefault(1));
+        SetPortraitSlot(1, roles.ElementAtOrDefault(0), line.RoleImage1);
+        SetPortraitSlot(2, roles.ElementAtOrDefault(1), line.RoleImage2);
     }
 
-    private void SetPortraitSlot(int slot, (string id, bool isSpeaker) role)
+    private void SetPortraitSlot(int slot, (string id, bool isSpeaker) role, string? overrideImagePath = null)
     {
         if (string.IsNullOrWhiteSpace(role.id))
         {
@@ -352,7 +352,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
             return;
         }
 
-        var path = ResolvePortraitPathByRoleId(role.id);
+        var path = ResolvePortraitPathByRoleId(role.id, overrideImagePath);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             ResetPortraitSlot(slot, null);
@@ -488,8 +488,17 @@ public partial class ScenePreviewViewModel : ViewModelBase
         return key.Equals("narrator", StringComparison.OrdinalIgnoreCase);
     }
 
-    private string ResolvePortraitPathByRoleId(string roleId)
+    private string ResolvePortraitPathByRoleId(string roleId, string? overrideImagePath = null)
     {
+        if (!string.IsNullOrWhiteSpace(overrideImagePath))
+        {
+            var resolvedOverride = ResolveResourcePath(overrideImagePath);
+            if (!string.IsNullOrWhiteSpace(resolvedOverride))
+            {
+                return resolvedOverride;
+            }
+        }
+
         if (_roleCharacterImageMap.TryGetValue(roleId, out var direct))
         {
             return ResolveResourcePath(direct);

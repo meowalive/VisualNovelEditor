@@ -104,6 +104,8 @@ public static class DialogueProjectService
                 line.CsvId,
                 NormalizeScriptForExport(line.BaseScript),
                 line.BackgroundPath,
+                line.RoleImage1,
+                line.RoleImage2,
                 line.EndScript,
                 NormalizeRolesForExport(line.Roles, validRoleIds),
                 line.IsNarrator ? "TRUE" : "FALSE",
@@ -266,6 +268,7 @@ public static class DialogueProjectService
                         }
 
                         role.Avatar = GetCellByColumn(row, header, "Avatar");
+                        role.ImageLib = GetCellByColumn(row, header, "ImageLib");
                         role.CharacterImage = GetCellByColumn(row, header, "CharacterImage");
                         role.DefaultY = GetDoubleByColumn(row, header, "DefaultY");
                         role.DefaultScale = GetDoubleByColumn(row, header, "DefaultScale", 1.0);
@@ -362,8 +365,8 @@ public static class DialogueProjectService
 
             var dataRows = new List<string[]>
             {
-                new[] { "Id", "Avatar", "CharacterImage", "DefaultY", "DefaultScale" },
-                new[] { "唯一标识", "头像路径", "立绘路径" }
+                new[] { "Id", "Avatar", "ImageLib", "CharacterImage", "DefaultY", "DefaultScale" },
+                new[] { "唯一标识", "头像路径", "立绘库路径", "默认立绘", "", "" }
             };
             foreach (var role in ordered)
             {
@@ -371,6 +374,7 @@ public static class DialogueProjectService
                 {
                     role.Id,
                     role.Avatar,
+                    role.ImageLib,
                     role.CharacterImage,
                     FormatDouble(role.DefaultY),
                     FormatDouble(role.DefaultScale)
@@ -486,6 +490,8 @@ public static class DialogueProjectService
                     var (pureBaseScript, bg) = ExtractMetadataFromScript(rawBaseScript);
                     line.BaseScript = pureBaseScript;
                     line.BackgroundPath = GetBackgroundValue(row, header, bg);
+                    line.RoleImage1 = GetCellByColumn(row, header, "RoleImage1");
+                    line.RoleImage2 = GetCellByColumn(row, header, "RoleImage2");
                     line.EndScript = GetCellByColumn(row, header, "EndScript");
                     line.Roles = GetCellByColumn(row, header, "Roles");
                     line.IsNarrator = ToBool(GetCellByColumn(row, header, "IsNarrator"));
@@ -686,7 +692,7 @@ public static class DialogueProjectService
 
     private static string[] BuildDataHeader(int maxChoice)
     {
-        var cols = new List<string> { "Id", "BaseScript", "Background", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
+        var cols = new List<string> { "Id", "BaseScript", "Background", "RoleImage1", "RoleImage2", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
         for (var i = 1; i <= maxChoice; i++)
         {
             cols.Add($"ChoiceScript{i}");
@@ -730,6 +736,8 @@ public static class DialogueProjectService
             "对话Id",
             "初始脚本",
             "背景图路径",
+            "角色1表情差分",
+            "角色2表情差分",
             "对话结束时执行",
             "出现的角色Id，说话者用<>包括，用,分割",
             "是否旁白(TRUE/FALSE)",

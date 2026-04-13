@@ -353,6 +353,10 @@
                                                       DisplayMemberBinding="{Binding DisplayName}"/>
                                             <CheckBox Content="非叙述者" VerticalAlignment="Center" IsChecked="{Binding SelectedRole1Muted, Mode=TwoWay}"/>
                                         </StackPanel>
+                                        <ComboBox Width="280"
+                                                  ItemsSource="{Binding Role1ImageOptions}"
+                                                  SelectedItem="{Binding SelectedRole1ImageOption, Mode=TwoWay}"
+                                                  DisplayMemberBinding="{Binding DisplayName}"/>
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <ComboBox Width="280"
                                                       ItemsSource="{Binding RoleOptions}"
@@ -360,6 +364,10 @@
                                                       DisplayMemberBinding="{Binding DisplayName}"/>
                                             <CheckBox Content="非叙述者" VerticalAlignment="Center" IsChecked="{Binding SelectedRole2Muted, Mode=TwoWay}"/>
                                         </StackPanel>
+                                        <ComboBox Width="280"
+                                                  ItemsSource="{Binding Role2ImageOptions}"
+                                                  SelectedItem="{Binding SelectedRole2ImageOption, Mode=TwoWay}"
+                                                  DisplayMemberBinding="{Binding DisplayName}"/>
                                         <CheckBox Content="旁白" IsChecked="{Binding SelectedLine.IsNarrator, Mode=TwoWay}"/>
                                     </StackPanel>
                                     <TextBlock Text="事件名" Grid.Row="3" Grid.Column="0"/>
@@ -573,7 +581,7 @@
                             CornerRadius="10"
                             Padding="8"
                             IsEnabled="{Binding RoleEditingEnabled}">
-                        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
                             <TextBlock Text="分类" Grid.Row="0" Grid.Column="0"/>
                             <ComboBox Grid.Row="0" Grid.Column="1"
                                       ItemsSource="{Binding RoleCategories}"
@@ -590,12 +598,17 @@
                             <TextBox Text="{Binding SelectedRoleEntry.NameJa, Mode=TwoWay}" Grid.Row="5" Grid.Column="1"/>
                             <TextBlock Text="Avatar路径" Grid.Row="6" Grid.Column="0"/>
                             <TextBox Text="{Binding SelectedRoleEntry.Avatar, Mode=TwoWay}" Grid.Row="6" Grid.Column="1"/>
-                            <TextBlock Text="CharacterImage路径" Grid.Row="7" Grid.Column="0"/>
-                            <TextBox Text="{Binding SelectedRoleEntry.CharacterImage, Mode=TwoWay}" Grid.Row="7" Grid.Column="1"/>
-                            <TextBlock Text="DefaultY" Grid.Row="8" Grid.Column="0"/>
-                            <TextBox Text="{Binding SelectedRoleEntry.DefaultY, Mode=TwoWay}" Grid.Row="8" Grid.Column="1"/>
-                            <TextBlock Text="DefaultScale" Grid.Row="9" Grid.Column="0"/>
-                            <TextBox Text="{Binding SelectedRoleEntry.DefaultScale, Mode=TwoWay}" Grid.Row="9" Grid.Column="1"/>
+                            <TextBlock Text="ImageLib路径" Grid.Row="7" Grid.Column="0"/>
+                            <TextBox Text="{Binding SelectedRoleEntry.ImageLib, Mode=TwoWay}" Grid.Row="7" Grid.Column="1"/>
+                            <TextBlock Text="默认立绘" Grid.Row="8" Grid.Column="0"/>
+                            <ComboBox Grid.Row="8" Grid.Column="1"
+                                      ItemsSource="{Binding SelectedRoleEntryImageOptions}"
+                                      SelectedItem="{Binding SelectedRoleEntryImageOption, Mode=TwoWay}"
+                                      DisplayMemberBinding="{Binding DisplayName}"/>
+                            <TextBlock Text="DefaultY" Grid.Row="9" Grid.Column="0"/>
+                            <TextBox Text="{Binding SelectedRoleEntry.DefaultY, Mode=TwoWay}" Grid.Row="9" Grid.Column="1"/>
+                            <TextBlock Text="DefaultScale" Grid.Row="10" Grid.Column="0"/>
+                            <TextBox Text="{Binding SelectedRoleEntry.DefaultScale, Mode=TwoWay}" Grid.Row="10" Grid.Column="1"/>
                         </Grid>
                     </Border>
                 </Grid>

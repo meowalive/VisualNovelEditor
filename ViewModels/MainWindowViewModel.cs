@@ -30,6 +30,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _resourcesRoot = string.Empty;
     private string _gameResourcesRoot = string.Empty;
     private Dictionary<string, string> _roleCharacterImageMap = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, List<ImageOption>> _roleImageOptionsMap = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _roleNameMap = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, double> _roleDefaultYMap = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, double> _roleDefaultScaleMap = new(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +52,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<string> ThemeModeOptions { get; } = [ThemeModeNormal, ThemeModeNight];
     public ObservableCollection<string> WindowBlurLevelOptions { get; } = new() { "无", "模糊", "亚克力" };
     public ObservableCollection<string> BackgroundImageOptions { get; } = new();
+    public ObservableCollection<ImageOption> SelectedRoleEntryImageOptions { get; } = new();
+    public ObservableCollection<ImageOption> Role1ImageOptions { get; } = new();
+    public ObservableCollection<ImageOption> Role2ImageOptions { get; } = new();
 
     [ObservableProperty] private DialogueScene? selectedScene;
     [ObservableProperty] private DialogueLine? selectedLine;
@@ -59,6 +63,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string newRoleCategoryName = string.Empty;
     [ObservableProperty] private RoleOption? selectedRole1Option;
     [ObservableProperty] private RoleOption? selectedRole2Option;
+    [ObservableProperty] private ImageOption? selectedRoleEntryImageOption;
+    [ObservableProperty] private ImageOption? selectedRole1ImageOption;
+    [ObservableProperty] private ImageOption? selectedRole2ImageOption;
     [ObservableProperty] private bool selectedRole1Muted;
     [ObservableProperty] private bool selectedRole2Muted;
     [ObservableProperty] private string statusText = "请选择并打开 Data/Text 对话工程目录。";
@@ -264,6 +271,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedRole1OptionChanged(RoleOption? value) => UpdateLineRolesFromSelectors();
     partial void OnSelectedRole2OptionChanged(RoleOption? value) => UpdateLineRolesFromSelectors();
+    partial void OnSelectedRoleEntryChanged(RoleEntry? value) => RefreshRoleEntryImageOptions();
+    partial void OnSelectedRoleEntryImageOptionChanged(ImageOption? value) => UpdateSelectedRoleEntryCharacterImage();
+    partial void OnSelectedRole1ImageOptionChanged(ImageOption? value) => UpdateLineRoleImagesFromSelectors();
+    partial void OnSelectedRole2ImageOptionChanged(ImageOption? value) => UpdateLineRoleImagesFromSelectors();
     partial void OnSelectedRole1MutedChanged(bool value) => UpdateLineRolesFromSelectors();
     partial void OnSelectedRole2MutedChanged(bool value) => UpdateLineRolesFromSelectors();
     partial void OnSelectedRoleCategoryChanged(string? value) => RefreshFilteredRoleEntries();
@@ -490,7 +501,9 @@ public partial class MainWindowViewModel : ViewModelBase
             ChoiceText4 = SelectedLine.ChoiceText4,
             ChoiceText4En = SelectedLine.ChoiceText4En,
             ChoiceText4Ja = SelectedLine.ChoiceText4Ja,
-            BackgroundPath = SelectedLine.BackgroundPath
+            BackgroundPath = SelectedLine.BackgroundPath,
+            RoleImage1 = SelectedLine.RoleImage1,
+            RoleImage2 = SelectedLine.RoleImage2
         };
 
         var idx = SelectedScene.Lines.IndexOf(SelectedLine);
@@ -857,6 +870,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void RefreshRoleMapsAndOptions()
     {
         _roleCharacterImageMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        _roleImageOptionsMap = new Dictionary<string, List<ImageOption>>(StringComparer.OrdinalIgnoreCase);
         _roleNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _roleDefaultYMap = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         _roleDefaultScaleMap = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -872,6 +886,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             var optionId = BuildRoleOptionId(role);
             var rawId = ExtractSuffixId(optionId);
+            var imageOptions = BuildImageOptionsForRole(role);
 
             if (!string.IsNullOrWhiteSpace(role.CharacterImage))
             {
@@ -880,6 +895,16 @@ public partial class MainWindowViewModel : ViewModelBase
                 if (!string.Equals(rawId, optionId, StringComparison.OrdinalIgnoreCase))
                 {
                     _roleCharacterImageMap[rawId] = role.CharacterImage;
+                }
+            }
+
+            if (imageOptions.Count > 0)
+            {
+                _roleImageOptionsMap[optionId] = imageOptions;
+                _roleImageOptionsMap[role.Id] = imageOptions;
+                if (!string.Equals(rawId, optionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _roleImageOptionsMap[rawId] = imageOptions;
                 }
             }
 
@@ -908,7 +933,151 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         SyncRoleSelectorsFromLine();
+        RefreshRoleEntryImageOptions();
         RefreshAllScenePreviews();
+    }
+
+    private List<ImageOption> BuildImageOptionsForRole(RoleEntry role)
+    {
+        var options = new List<ImageOption>();
+        if (string.IsNullOrWhiteSpace(role.ImageLib))
+        {
+            return options;
+        }
+
+        var resolvedDir = ResolveResourceDirectory(role.ImageLib);
+        if (string.IsNullOrWhiteSpace(resolvedDir) || !Directory.Exists(resolvedDir))
+        {
+            return options;
+        }
+
+        var storedPrefix = NormalizeStoredDirectoryPath(role.ImageLib);
+        foreach (var file in Directory.EnumerateFiles(resolvedDir, "*.*", SearchOption.AllDirectories)
+                     .Where(IsSupportedBackgroundFile)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var relative = Path.GetRelativePath(resolvedDir, file).Replace('\\', '/');
+            var displayName = Path.GetFileNameWithoutExtension(file);
+            var storedPath = Path.IsPathRooted(role.ImageLib)
+                ? Path.GetFullPath(file)
+                : string.IsNullOrWhiteSpace(storedPrefix)
+                    ? relative
+                    : $"{storedPrefix}/{relative}";
+            options.Add(new ImageOption
+            {
+                Path = storedPath,
+                DisplayName = string.IsNullOrWhiteSpace(displayName) ? relative : displayName
+            });
+        }
+
+        return options;
+    }
+
+    private void RefreshRoleEntryImageOptions()
+    {
+        var role = SelectedRoleEntry;
+        var currentPath = role?.CharacterImage ?? string.Empty;
+        var options = new List<ImageOption>
+        {
+            new() { Path = string.Empty, DisplayName = "(未选择)" }
+        };
+        if (role != null)
+        {
+            options.AddRange(BuildImageOptionsForRole(role));
+        }
+
+        ReplaceImageOptions(SelectedRoleEntryImageOptions, options);
+        _updatingRoleSelectors = true;
+        try
+        {
+            SelectedRoleEntryImageOption = FindImageOptionByPath(SelectedRoleEntryImageOptions, currentPath)
+                ?? SelectedRoleEntryImageOptions.FirstOrDefault();
+            if (role != null && SelectedRoleEntryImageOption != null
+                && !string.Equals(role.CharacterImage, SelectedRoleEntryImageOption.Path, StringComparison.Ordinal))
+            {
+                role.CharacterImage = SelectedRoleEntryImageOption.Path;
+            }
+        }
+        finally
+        {
+            _updatingRoleSelectors = false;
+        }
+    }
+
+    private void RefreshLineRoleImageOptions()
+    {
+        var role1Options = BuildLineRoleImageOptions(SelectedRole1Option?.Id);
+        var role2Options = BuildLineRoleImageOptions(SelectedRole2Option?.Id);
+
+        ReplaceImageOptions(Role1ImageOptions, role1Options);
+        ReplaceImageOptions(Role2ImageOptions, role2Options);
+
+        _updatingRoleSelectors = true;
+        try
+        {
+            SelectedRole1ImageOption = FindImageOptionByPath(Role1ImageOptions, SelectedLine?.RoleImage1 ?? string.Empty)
+                ?? Role1ImageOptions.FirstOrDefault();
+            SelectedRole2ImageOption = FindImageOptionByPath(Role2ImageOptions, SelectedLine?.RoleImage2 ?? string.Empty)
+                ?? Role2ImageOptions.FirstOrDefault();
+            if (SelectedLine != null)
+            {
+                SelectedLine.RoleImage1 = SelectedRole1ImageOption?.Path ?? string.Empty;
+                SelectedLine.RoleImage2 = SelectedRole2ImageOption?.Path ?? string.Empty;
+            }
+        }
+        finally
+        {
+            _updatingRoleSelectors = false;
+        }
+    }
+
+    private List<ImageOption> BuildLineRoleImageOptions(string? roleId)
+    {
+        var options = new List<ImageOption>
+        {
+            new() { Path = string.Empty, DisplayName = "(默认立绘)" }
+        };
+        if (!string.IsNullOrWhiteSpace(roleId) && _roleImageOptionsMap.TryGetValue(roleId, out var variants))
+        {
+            options.AddRange(variants);
+        }
+
+        return options;
+    }
+
+    private void ReplaceImageOptions(ObservableCollection<ImageOption> target, IEnumerable<ImageOption> source)
+    {
+        target.Clear();
+        foreach (var item in source)
+        {
+            target.Add(item);
+        }
+    }
+
+    private static ImageOption? FindImageOptionByPath(IEnumerable<ImageOption> options, string path)
+    {
+        return options.FirstOrDefault(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateSelectedRoleEntryCharacterImage()
+    {
+        if (_updatingRoleSelectors || SelectedRoleEntry == null)
+        {
+            return;
+        }
+
+        SelectedRoleEntry.CharacterImage = SelectedRoleEntryImageOption?.Path ?? string.Empty;
+    }
+
+    private void UpdateLineRoleImagesFromSelectors()
+    {
+        if (_updatingRoleSelectors || SelectedLine == null)
+        {
+            return;
+        }
+
+        SelectedLine.RoleImage1 = SelectedRole1ImageOption?.Path ?? string.Empty;
+        SelectedLine.RoleImage2 = SelectedRole2ImageOption?.Path ?? string.Empty;
     }
 
     private void RefreshRoleCategories()
@@ -1389,8 +1558,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         PreviewSpeaker = ResolveSpeakerName(speaker);
 
-        SetPortraitSlot(1, roles.ElementAtOrDefault(0));
-        SetPortraitSlot(2, roles.ElementAtOrDefault(1));
+        SetPortraitSlot(1, roles.ElementAtOrDefault(0), line.RoleImage1);
+        SetPortraitSlot(2, roles.ElementAtOrDefault(1), line.RoleImage2);
     }
 
     private void ClearPreviewBackground()
@@ -1433,8 +1602,17 @@ public partial class MainWindowViewModel : ViewModelBase
         old2?.Dispose();
     }
 
-    private string ResolvePortraitPathByRoleId(string roleId)
+    private string ResolvePortraitPathByRoleId(string roleId, string? overrideImagePath = null)
     {
+        if (!string.IsNullOrWhiteSpace(overrideImagePath))
+        {
+            var resolvedOverride = ResolveResourcePath(overrideImagePath);
+            if (!string.IsNullOrWhiteSpace(resolvedOverride))
+            {
+                return resolvedOverride;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(roleId))
         {
             return string.Empty;
@@ -1451,7 +1629,7 @@ public partial class MainWindowViewModel : ViewModelBase
             : string.Empty;
     }
 
-    private void SetPortraitSlot(int slot, (string id, bool isSpeaker) role)
+    private void SetPortraitSlot(int slot, (string id, bool isSpeaker) role, string? overrideImagePath = null)
     {
         if (string.IsNullOrWhiteSpace(role.id))
         {
@@ -1460,7 +1638,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var path = ResolvePortraitPathByRoleId(role.id);
+        var path = ResolvePortraitPathByRoleId(role.id, overrideImagePath);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             ResetPreviewPortraitSlot(slot, null);
@@ -1872,6 +2050,7 @@ public partial class MainWindowViewModel : ViewModelBase
             SelectedRole2Option = roles.Count > 1 ? FindOrCreateRoleOptionForDisplay(roles[1].id) : null;
             SelectedRole1Muted = roles.Count > 0 && !roles[0].isSpeaker;
             SelectedRole2Muted = roles.Count > 1 && !roles[1].isSpeaker;
+            RefreshLineRoleImageOptions();
         }
         finally
         {
@@ -1898,6 +2077,15 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         SelectedLine.Roles = string.Join(",", parts);
+        if (SelectedRole1Option == null || string.IsNullOrWhiteSpace(SelectedRole1Option.Id))
+        {
+            SelectedLine.RoleImage1 = string.Empty;
+        }
+        if (SelectedRole2Option == null || string.IsNullOrWhiteSpace(SelectedRole2Option.Id))
+        {
+            SelectedLine.RoleImage2 = string.Empty;
+        }
+        RefreshLineRoleImageOptions();
     }
 
     private RoleOption? FindOrCreateRoleOptionForDisplay(string roleId)
@@ -1956,6 +2144,60 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string ResolveResourcePath(string? rawPath) =>
         ResourcePathResolver.Resolve(rawPath, _projectRoot, _resourcesRoot, _gameResourcesRoot);
+
+    private string ResolveResourceDirectory(string? rawPath)
+    {
+        if (string.IsNullOrWhiteSpace(rawPath))
+        {
+            return string.Empty;
+        }
+
+        if (Path.IsPathRooted(rawPath) && Directory.Exists(rawPath))
+        {
+            return Path.GetFullPath(rawPath);
+        }
+
+        var normalized = NormalizeStoredDirectoryPath(rawPath);
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_gameResourcesRoot))
+        {
+            candidates.Add(Path.Combine(_gameResourcesRoot, normalized));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_resourcesRoot))
+        {
+            candidates.Add(Path.Combine(_resourcesRoot, normalized));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_projectRoot))
+        {
+            candidates.Add(Path.Combine(_projectRoot, normalized));
+            candidates.Add(Path.Combine(_projectRoot, "GameResources", normalized));
+            candidates.Add(Path.Combine(_projectRoot, "Resources", normalized));
+            var assetsRoot = Path.Combine(_projectRoot, "Assets");
+            if (Directory.Exists(assetsRoot))
+            {
+                candidates.Add(Path.Combine(assetsRoot, normalized));
+                candidates.Add(Path.Combine(assetsRoot, "GameResources", normalized));
+                candidates.Add(Path.Combine(assetsRoot, "Resources", normalized));
+            }
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (Directory.Exists(candidate))
+            {
+                return Path.GetFullPath(candidate);
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string NormalizeStoredDirectoryPath(string? path)
+    {
+        return (path ?? string.Empty).Trim().TrimEnd('\\', '/').Replace('\\', '/');
+    }
 
     private bool TryResolveJumpFromAction(DialogueScriptAction action, out int targetIndex)
     {
@@ -2457,6 +2699,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void SetSceneThumbnailPortraits(DialogueScene scene, string rolesRaw)
     {
+        var sourceLine = scene.Lines.FirstOrDefault();
         var roles = ParseRoles(rolesRaw);
         SetSceneThumbnailPortrait(scene, 1, null, false, false);
         SetSceneThumbnailPortrait(scene, 2, null, false, false);
@@ -2465,24 +2708,24 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (roles.Count > 0)
         {
-            SetSceneThumbnailPortraitByRole(scene, 1, roles[0]);
+            SetSceneThumbnailPortraitByRole(scene, 1, roles[0], sourceLine?.RoleImage1);
         }
         if (roles.Count > 1)
         {
-            SetSceneThumbnailPortraitByRole(scene, 2, roles[1]);
+            SetSceneThumbnailPortraitByRole(scene, 2, roles[1], sourceLine?.RoleImage2);
         }
 
         RefreshSceneThumbnailPortraitLayout(scene);
     }
 
-    private void SetSceneThumbnailPortraitByRole(DialogueScene scene, int slot, (string id, bool isSpeaker) role)
+    private void SetSceneThumbnailPortraitByRole(DialogueScene scene, int slot, (string id, bool isSpeaker) role, string? overrideImagePath = null)
     {
         if (string.IsNullOrWhiteSpace(role.id))
         {
             return;
         }
 
-        var path = ResolvePortraitPathByRoleId(role.id);
+        var path = ResolvePortraitPathByRoleId(role.id, overrideImagePath);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             return;
