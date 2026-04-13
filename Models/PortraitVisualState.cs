@@ -7,6 +7,7 @@ public sealed class PortraitVisualState
     public double X { get; set; }
     public double Y { get; set; }
     public double Scale { get; set; } = 1.0;
+    public double Opacity { get; set; } = 1.0;
 
     public void Reset(string roleId, double defaultY, double defaultScale)
     {
@@ -15,6 +16,7 @@ public sealed class PortraitVisualState
         X = 0;
         Y = defaultY;
         Scale = defaultScale;
+        Opacity = 1.0;
     }
 
     public void Clear()

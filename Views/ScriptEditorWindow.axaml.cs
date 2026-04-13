@@ -169,7 +169,7 @@ public partial class ScriptEditorWindow : Window
         _syntaxStatusText = this.FindControl<TextBlock>("SyntaxStatusText")!;
         _snippetItems = this.FindControl<ItemsControl>("SnippetItems")!;
 
-        _editor.Text = initialScript ?? string.Empty;
+        _editor.Text = LuaScriptRuntimeService.ToDisplayAliases(initialScript ?? string.Empty);
         _textMateInstallation = _editor.InstallTextMate(_registryOptions);
         var luaLanguage = _registryOptions.GetLanguageByExtension(".lua");
         if (luaLanguage != null)
@@ -281,7 +281,7 @@ public partial class ScriptEditorWindow : Window
             return;
         }
 
-        ScriptText = _editor.Text ?? string.Empty;
+        ScriptText = LuaScriptRuntimeService.NormalizeAliases(_editor.Text ?? string.Empty);
         Close(true);
     }
 

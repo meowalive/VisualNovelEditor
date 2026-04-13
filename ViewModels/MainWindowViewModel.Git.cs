@@ -14,22 +14,80 @@ namespace VNEditor.ViewModels;
 public partial class MainWindowViewModel
 {
     public IGitUserNotify? GitNotify { get; set; }
+    private string _gitUserDisplayName = string.Empty;
+
+    public string GitUserDisplayName
+    {
+        get => _gitUserDisplayName;
+        private set
+        {
+            if (string.Equals(_gitUserDisplayName, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _gitUserDisplayName = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GitSyncUserText));
+        }
+    }
+
+    public string GitSyncUserText =>
+        string.IsNullOrWhiteSpace(GitUserDisplayName) ? string.Empty : $"同步者：{GitUserDisplayName}";
+
+    private void RefreshGitUserDisplayName()
+    {
+        GitUserDisplayName = GitPanelEnabled && !string.IsNullOrEmpty(_projectRoot)
+            ? ProjectGitService.GetGitUserDisplayName(_projectRoot)
+            : string.Empty;
+    }
+
+    private void RefreshPendingProjectImagePaths()
+    {
+        if (!GitPanelEnabled || string.IsNullOrEmpty(_projectRoot))
+        {
+            return;
+        }
+
+        var before = _pendingGitCommitPaths.Count;
+        foreach (var path in ProjectGitService.CollectChangedProjectImageFiles(_projectRoot, _projectRoot))
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                _pendingGitCommitPaths.Add(Path.GetFullPath(path));
+            }
+        }
+
+        if (_pendingGitCommitPaths.Count != before)
+        {
+            OnPropertyChanged(nameof(HasUnpushedCommits));
+            GitPushCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     private void AfterProjectOpenedForGit()
     {
         if (string.IsNullOrEmpty(_projectRoot))
         {
             GitPanelEnabled = false;
+            GitUserDisplayName = string.Empty;
             GitAheadBy = 0;
             GitStatusHint = string.Empty;
             return;
         }
 
         GitPanelEnabled = ProjectGitService.IsGitRepository(_projectRoot);
+        RefreshGitUserDisplayName();
+        RefreshPendingProjectImagePaths();
         RefreshGitAhead();
-        GitStatusHint = GitPanelEnabled
-            ? (GitAheadBy > 0 ? $"未推送提交：{GitAheadBy}" : "与远端同步。")
-            : string.Empty;
+        if (GitPanelEnabled)
+        {
+            UpdateGitStatusHintForPendingAndAhead();
+        }
+        else
+        {
+            GitStatusHint = string.Empty;
+        }
         _ = RunGitPullOnOpenAsync();
     }
 
@@ -201,10 +259,7 @@ public partial class MainWindowViewModel
             }
 
             var full = Path.GetFullPath(p);
-            if (File.Exists(full))
-            {
-                _pendingGitCommitPaths.Add(full);
-            }
+            _pendingGitCommitPaths.Add(full);
         }
 
         UpdateGitStatusHintForPendingAndAhead();
@@ -215,16 +270,18 @@ public partial class MainWindowViewModel
     /// <returns>是否成功提交或无需提交。</returns>
     private bool TryFlushPendingGitCommit()
     {
+        RefreshPendingProjectImagePaths();
         if (!GitPanelEnabled || string.IsNullOrEmpty(_projectRoot) || _pendingGitCommitPaths.Count == 0)
         {
             return true;
         }
 
+        RefreshGitUserDisplayName();
         var paths = _pendingGitCommitPaths.ToList();
         var (ok, err) = ProjectGitService.CommitTrackedFiles(
             _projectRoot,
             paths,
-            "VNEditor: 本地编辑");
+            $"{GitUserDisplayName}: 本地编辑");
         if (!ok)
         {
             if (GitNotify != null)
@@ -250,13 +307,15 @@ public partial class MainWindowViewModel
             return;
         }
 
+        RefreshPendingProjectImagePaths();
+
         if (GitAheadBy > 0 && _pendingGitCommitPaths.Count > 0)
         {
-            GitStatusHint = $"未推送提交：{GitAheadBy}；另有已保存将合并提交";
+            GitStatusHint = $"未推送提交：{GitAheadBy}；另有已保存编辑/工程内图片将合并提交";
         }
         else if (_pendingGitCommitPaths.Count > 0)
         {
-            GitStatusHint = "已保存的编辑将在上传时合并为一次提交。";
+            GitStatusHint = "已保存的编辑与工程内图片改动将在上传时合并为一次提交。";
         }
         else
         {
@@ -525,6 +584,7 @@ public partial class MainWindowViewModel
 
     partial void OnGitPanelEnabledChanged(bool value)
     {
+        RefreshGitUserDisplayName();
         GitCheckoutSceneFilesCommand.NotifyCanExecuteChanged();
         GitCheckoutRoleFilesCommand.NotifyCanExecuteChanged();
         GitPullAllCommand.NotifyCanExecuteChanged();

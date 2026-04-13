@@ -43,6 +43,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [ObservableProperty] private bool previewUseDualPortrait;
     [ObservableProperty] private Bitmap? previewSinglePortrait;
     [ObservableProperty] private bool previewSinglePortraitDim;
+    [ObservableProperty] private double previewPortrait1Opacity = 1.0;
+    [ObservableProperty] private double previewPortrait2Opacity = 1.0;
+    [ObservableProperty] private double previewSinglePortraitOpacity = 1.0;
     [ObservableProperty] private double previewPortrait1OffsetX;
     [ObservableProperty] private double previewPortrait1OffsetY;
     [ObservableProperty] private double previewPortrait1Scale = 1.0;
@@ -94,7 +97,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [RelayCommand]
     private void LeftClick()
     {
-        if (TryCompletePreviewTypewriter())
+        if (PreviewDialogueBoxVisible && TryCompletePreviewTypewriter())
         {
             return;
         }
@@ -104,7 +107,8 @@ public partial class ScenePreviewViewModel : ViewModelBase
             return;
         }
 
-        if (PreviewChoice1Visible || PreviewChoice2Visible || PreviewChoice3Visible || PreviewChoice4Visible)
+        if (PreviewDialogueBoxVisible
+            && (PreviewChoice1Visible || PreviewChoice2Visible || PreviewChoice3Visible || PreviewChoice4Visible))
         {
             return;
         }
@@ -118,7 +122,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(line.EndScript))
         {
-            MoveTo(_playingIndex + 1);
+            MoveToDefaultNextOrFinish();
             return;
         }
 
@@ -160,7 +164,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         var script = GetChoiceScriptByIndex(line, idx);
         if (string.IsNullOrWhiteSpace(script))
         {
-            MoveTo(_playingIndex + 1);
+            MoveToDefaultNextOrFinish();
             return;
         }
 
@@ -184,7 +188,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(line.EndScript))
         {
-            MoveTo(_playingIndex + 1);
+            MoveToDefaultNextOrFinish();
             return;
         }
 
@@ -242,9 +246,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
         }
 
         PreviewText = line.Text;
-        StartPreviewTypewriter(line.Text);
+        StartPreviewTypewriter(line.Text, animate: PreviewDialogueBoxVisible);
         SetPreviewBackground(line.BackgroundPath, keepWhenEmpty: true);
-        SetPortraits(line.Roles, line.IsNarrator);
+        SetPortraits(line);
         ApplyVisualCommands(line.BaseScript);
         SetupChoices(line);
         if (!PreviewChoice1Visible && !PreviewChoice2Visible && !PreviewChoice3Visible && !PreviewChoice4Visible)
@@ -276,6 +280,17 @@ public partial class ScenePreviewViewModel : ViewModelBase
         PreviewChoice2Visible = false;
         PreviewChoice3Visible = false;
         PreviewChoice4Visible = false;
+    }
+
+    private void MoveToDefaultNextOrFinish()
+    {
+        if (DialogueNavigationService.TryResolveDefaultNextIndex(_scene.Lines, _playingIndex, out var nextIndex))
+        {
+            MoveTo(nextIndex);
+            return;
+        }
+
+        EndPreview("鍦烘櫙鎾斁瀹屾垚銆?");
     }
 
     private void SetPreviewBackground(string rawPath, bool keepWhenEmpty)
@@ -310,13 +325,13 @@ public partial class ScenePreviewViewModel : ViewModelBase
         oldBg?.Dispose();
     }
 
-    private void SetPortraits(string rolesRaw, bool isNarrator)
+    private void SetPortraits(DialogueLine line)
     {
-        var roles = ParseRoles(rolesRaw);
+        var roles = ParseRoles(line.Roles);
         if (roles.Count == 0)
         {
             ClearPortraits();
-            PreviewSpeaker = isNarrator ? string.Empty : "旁白";
+            PreviewSpeaker = line.IsNarrator ? string.Empty : "旁白";
             return;
         }
 
@@ -325,13 +340,13 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             speakerId = roles[0].id;
         }
-        PreviewSpeaker = isNarrator ? string.Empty : ResolveRoleName(speakerId);
+        PreviewSpeaker = line.IsNarrator ? string.Empty : ResolveRoleName(speakerId);
 
-        SetPortraitSlot(1, roles.ElementAtOrDefault(0));
-        SetPortraitSlot(2, roles.ElementAtOrDefault(1));
+        SetPortraitSlot(1, roles.ElementAtOrDefault(0), line.RoleImage1);
+        SetPortraitSlot(2, roles.ElementAtOrDefault(1), line.RoleImage2);
     }
 
-    private void SetPortraitSlot(int slot, (string id, bool isSpeaker) role)
+    private void SetPortraitSlot(int slot, (string id, bool isSpeaker) role, string? overrideImagePath = null)
     {
         if (string.IsNullOrWhiteSpace(role.id))
         {
@@ -340,7 +355,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
             return;
         }
 
-        var path = ResolvePortraitPathByRoleId(role.id);
+        var path = ResolvePortraitPathByRoleId(role.id, overrideImagePath);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             ResetPortraitSlot(slot, null);
@@ -391,6 +406,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             PreviewSinglePortrait = null;
             PreviewSinglePortraitDim = false;
+            PreviewSinglePortraitOpacity = 1.0;
             PreviewSinglePortraitOffsetX = 0;
             PreviewSinglePortraitOffsetY = 0;
             PreviewSinglePortraitScale = 1.0;
@@ -401,12 +417,14 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             PreviewSinglePortrait = PreviewPortrait1;
             PreviewSinglePortraitDim = PreviewPortrait1Dim;
+            PreviewSinglePortraitOpacity = PreviewPortrait1Opacity;
             SyncSinglePortraitTransform(1);
         }
         else
         {
             PreviewSinglePortrait = PreviewPortrait2;
             PreviewSinglePortraitDim = PreviewPortrait2Dim;
+            PreviewSinglePortraitOpacity = PreviewPortrait2Opacity;
             SyncSinglePortraitTransform(2);
         }
     }
@@ -426,6 +444,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
         PreviewUseDualPortrait = false;
         PreviewSinglePortrait = null;
         PreviewSinglePortraitDim = false;
+        PreviewPortrait1Opacity = 1.0;
+        PreviewPortrait2Opacity = 1.0;
+        PreviewSinglePortraitOpacity = 1.0;
         PreviewPortrait1OffsetX = 0;
         PreviewPortrait1OffsetY = 0;
         PreviewPortrait1Scale = 1.0;
@@ -476,8 +497,17 @@ public partial class ScenePreviewViewModel : ViewModelBase
         return key.Equals("narrator", StringComparison.OrdinalIgnoreCase);
     }
 
-    private string ResolvePortraitPathByRoleId(string roleId)
+    private string ResolvePortraitPathByRoleId(string roleId, string? overrideImagePath = null)
     {
+        if (!string.IsNullOrWhiteSpace(overrideImagePath))
+        {
+            var resolvedOverride = ResolveResourcePath(overrideImagePath);
+            if (!string.IsNullOrWhiteSpace(resolvedOverride))
+            {
+                return resolvedOverride;
+            }
+        }
+
         if (_roleCharacterImageMap.TryGetValue(roleId, out var direct))
         {
             return ResolveResourcePath(direct);
@@ -506,7 +536,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
             }
         }
 
-        ApplySlotTransform(slot, 0, defaultY, defaultScale);
+        ApplySlotTransform(slot, 0, defaultY, defaultScale, 1.0);
     }
 
     private void ApplyVisualCommands(string? script)
@@ -591,6 +621,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
                 PortraitVisualCommandType.MoveX => state.X,
                 PortraitVisualCommandType.MoveY => state.Y,
                 PortraitVisualCommandType.Scale => state.Scale,
+                PortraitVisualCommandType.Opacity => state.Opacity,
                 _ => 0
             };
         }
@@ -606,6 +637,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
                 PortraitVisualCommandType.MoveX => command.Value,
                 PortraitVisualCommandType.MoveY => state.DefaultY + command.Value,
                 PortraitVisualCommandType.Scale => command.Value,
+                PortraitVisualCommandType.Opacity => command.Value,
                 _ => command.Value
             };
         }
@@ -616,6 +648,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         double x;
         double y;
         double scale;
+        double opacity;
         lock (_portraitStateSync)
         {
             var state = _portraitStates[slot - 1];
@@ -630,29 +663,35 @@ public partial class ScenePreviewViewModel : ViewModelBase
                 case PortraitVisualCommandType.Scale:
                     state.Scale = value;
                     break;
+                case PortraitVisualCommandType.Opacity:
+                    state.Opacity = Math.Clamp(value, 0, 1);
+                    break;
             }
 
             x = state.X;
             y = state.Y;
             scale = state.Scale;
+            opacity = state.Opacity;
         }
 
-        ApplySlotTransform(slot, x, y, scale);
+        ApplySlotTransform(slot, x, y, scale, opacity);
     }
 
-    private void ApplySlotTransform(int slot, double x, double y, double scale)
+    private void ApplySlotTransform(int slot, double x, double y, double scale, double opacity)
     {
         if (slot == 1)
         {
             PreviewPortrait1OffsetX = x;
             PreviewPortrait1OffsetY = y;
             PreviewPortrait1Scale = scale;
+            PreviewPortrait1Opacity = opacity;
         }
         else
         {
             PreviewPortrait2OffsetX = x;
             PreviewPortrait2OffsetY = y;
             PreviewPortrait2Scale = scale;
+            PreviewPortrait2Opacity = opacity;
         }
 
         SyncSinglePortraitTransform(PreviewPortrait1Visible ? 1 : 2);
@@ -670,12 +709,14 @@ public partial class ScenePreviewViewModel : ViewModelBase
             PreviewSinglePortraitOffsetX = PreviewPortrait1OffsetX;
             PreviewSinglePortraitOffsetY = PreviewPortrait1OffsetY;
             PreviewSinglePortraitScale = PreviewPortrait1Scale;
+            PreviewSinglePortraitOpacity = PreviewPortrait1Opacity;
         }
         else if (slot == 2 && PreviewPortrait2Visible)
         {
             PreviewSinglePortraitOffsetX = PreviewPortrait2OffsetX;
             PreviewSinglePortraitOffsetY = PreviewPortrait2OffsetY;
             PreviewSinglePortraitScale = PreviewPortrait2Scale;
+            PreviewSinglePortraitOpacity = PreviewPortrait2Opacity;
         }
     }
 
@@ -706,13 +747,20 @@ public partial class ScenePreviewViewModel : ViewModelBase
         return from + ((to - from) * progress);
     }
 
-    private void StartPreviewTypewriter(string? text)
+    private void StartPreviewTypewriter(string? text, bool animate = true)
     {
         CancelPendingPreviewTypewriter();
         var totalVisibleCharacters = DialogueTextUtility.CountVisibleCharacters(text);
         if (totalVisibleCharacters <= 0)
         {
             PreviewVisibleCharacterCount = -1;
+            IsPreviewTyping = false;
+            return;
+        }
+
+        if (!animate)
+        {
+            PreviewVisibleCharacterCount = totalVisibleCharacters;
             IsPreviewTyping = false;
             return;
         }

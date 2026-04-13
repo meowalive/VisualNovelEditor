@@ -11,6 +11,7 @@ public partial class RoleEntry : ObservableObject
     [ObservableProperty] private string nameZhHant = string.Empty;
     [ObservableProperty] private string nameJa = string.Empty;
     [ObservableProperty] private string avatar = string.Empty;
+    [ObservableProperty] private string imageLib = string.Empty;
     [ObservableProperty] private string characterImage = string.Empty;
     [ObservableProperty] private double defaultY;
     [ObservableProperty] private double defaultScale = 1.0;

@@ -33,6 +33,8 @@ public partial class DialogueLine : ObservableObject
     [ObservableProperty] private string choiceText4Ja = string.Empty;
     // Editor-only metadata stored in the data CSV.
     [ObservableProperty] private string backgroundPath = string.Empty;
+    [ObservableProperty] private string roleImage1 = string.Empty;
+    [ObservableProperty] private string roleImage2 = string.Empty;
     /// <summary>Git 拉取合并冲突已按远端解决时，标记需人工核对的行。</summary>
     [ObservableProperty] private bool hasGitSyncWarning;
 

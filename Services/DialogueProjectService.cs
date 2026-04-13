@@ -13,7 +13,7 @@ public static class DialogueProjectService
     private const string LegacyBgMetaPrefix = "//VNEditor:BG=";
     private static readonly string[] BackgroundColumnNames = ["Backround", "Background", "BackgroundPath"];
 
-    /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue（与 .git 同级的是工程根）。</summary>
+    /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue。</summary>
     public static string GetDialogueDataDir(string projectRoot) =>
         Path.Combine(projectRoot, "DataConfigs", "Data", "Dialogue");
 
@@ -28,8 +28,8 @@ public static class DialogueProjectService
         Path.Combine(projectRoot, "DataConfigs", "Text", "RoleData");
 
     /// <summary>
-    /// 解析工程：在选中路径下定位 <c>DataConfigs/Data/Dialogue</c> 与 <c>DataConfigs/Text/Dialogue</c>，
-    /// 返回的 <c>projectRoot</c> 为包含 <c>DataConfigs</c> 的目录（与仓库 .git 同级）。
+    /// 解析工程：用户选中的目录本身必须就是工程根，且其下直接包含
+    /// <c>DataConfigs</c> 与 <c>GameResources</c>。
     /// </summary>
     public static (string dataDir, string textDir, string projectRoot)? ResolveProjectDirs(string selectedPath)
     {
@@ -38,73 +38,19 @@ public static class DialogueProjectService
             return null;
         }
 
-        var full = Path.GetFullPath(selectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-
-        // 1) 选中文件夹即为 DataConfigs
-        if (Path.GetFileName(full).Equals("DataConfigs", StringComparison.OrdinalIgnoreCase))
+        var projectRoot = Path.GetFullPath(selectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var childDataConfigs = Path.Combine(projectRoot, "DataConfigs");
+        var gameResourcesDir = Path.Combine(projectRoot, "GameResources");
+        if (!Directory.Exists(childDataConfigs) || !Directory.Exists(gameResourcesDir))
         {
-            var projectRoot = Directory.GetParent(full)?.FullName;
-            if (string.IsNullOrEmpty(projectRoot))
-            {
-                return null;
-            }
-
-            var dataDir = Path.Combine(full, "Data", "Dialogue");
-            var textDir = Path.Combine(full, "Text", "Dialogue");
-            if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-            {
-                return (dataDir, textDir, projectRoot);
-            }
-
             return null;
         }
 
-        // 2) 工程根：直接包含 DataConfigs 子目录
-        var childDataConfigs = Path.Combine(full, "DataConfigs");
-        if (Directory.Exists(childDataConfigs))
-        {
-            var dataDir = Path.Combine(childDataConfigs, "Data", "Dialogue");
-            var textDir = Path.Combine(childDataConfigs, "Text", "Dialogue");
-            if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-            {
-                return (dataDir, textDir, full);
-            }
-
-            return null;
-        }
-
-        // 3) 向上查找：某级目录下存在 DataConfigs，或当前位于 DataConfigs 子树内
-        for (var dir = new DirectoryInfo(full); dir != null; dir = dir.Parent)
-        {
-            var tryDc = Path.Combine(dir.FullName, "DataConfigs");
-            if (Directory.Exists(tryDc))
-            {
-                var dataDir = Path.Combine(tryDc, "Data", "Dialogue");
-                var textDir = Path.Combine(tryDc, "Text", "Dialogue");
-                if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-                {
-                    return (dataDir, textDir, dir.FullName);
-                }
-            }
-
-            if (dir.Name.Equals("DataConfigs", StringComparison.OrdinalIgnoreCase))
-            {
-                var dataDir = Path.Combine(dir.FullName, "Data", "Dialogue");
-                var textDir = Path.Combine(dir.FullName, "Text", "Dialogue");
-                if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-                {
-                    var projectRoot = dir.Parent?.FullName;
-                    if (!string.IsNullOrEmpty(projectRoot))
-                    {
-                        return (dataDir, textDir, projectRoot);
-                    }
-                }
-
-                return null;
-            }
-        }
-
-        return null;
+        var dataDir = Path.Combine(childDataConfigs, "Data", "Dialogue");
+        var textDir = Path.Combine(childDataConfigs, "Text", "Dialogue");
+        return Directory.Exists(dataDir) && Directory.Exists(textDir)
+            ? (dataDir, textDir, projectRoot)
+            : null;
     }
 
     public static ObservableCollection<DialogueScene> LoadScenes(string dataDir, string textDir)
@@ -148,7 +94,7 @@ public static class DialogueProjectService
         Directory.CreateDirectory(textDir);
 
         var maxChoice = Math.Clamp(scene.Lines.Count == 0 ? 0 : scene.Lines.Max(x => x.ChoiceCount), 0, 4);
-        var dataRows = new List<string[]> { BuildDataHeader(maxChoice), BuildDataDesc(maxChoice) };
+        var dataRows = new List<string[]> { BuildDataHeader(maxChoice), BuildDataDescriptionRow(maxChoice) };
         var textRows = new List<string[]> { BuildTextHeader(maxChoice), BuildTextDesc(maxChoice) };
 
         foreach (var line in scene.Lines)
@@ -157,8 +103,15 @@ public static class DialogueProjectService
             {
                 line.CsvId,
                 NormalizeScriptForExport(line.BaseScript),
+<<<<<<< HEAD
                 NormalizeImageResourcePathForExport(line.BackgroundPath),
                 line.EndScript,
+=======
+                line.BackgroundPath,
+                line.RoleImage1,
+                line.RoleImage2,
+                NormalizePlainScriptForExport(line.EndScript),
+>>>>>>> 1417332ea2e60c87aa1b5ca32b42a567c7ed43ae
                 NormalizeRolesForExport(line.Roles, validRoleIds),
                 line.IsNarrator ? "TRUE" : "FALSE",
                 line.EventName,
@@ -166,7 +119,7 @@ public static class DialogueProjectService
             };
             for (var i = 1; i <= maxChoice; i++)
             {
-                dataRow.Add(GetChoiceScript(line, i));
+                dataRow.Add(GetChoiceScriptForExport(line, i));
             }
             dataRows.Add(dataRow.ToArray());
 
@@ -183,9 +136,6 @@ public static class DialogueProjectService
                 textRow.Add(GetChoiceText(line, i, "en"));
                 textRow.Add(GetChoiceText(line, i, "ja"));
             }
-            textRow.Add(string.Empty);
-            textRow.Add(string.Empty);
-            textRow.Add(string.Empty);
             textRows.Add(textRow.ToArray());
         }
 
@@ -320,6 +270,7 @@ public static class DialogueProjectService
                         }
 
                         role.Avatar = GetCellByColumn(row, header, "Avatar");
+                        role.ImageLib = GetCellByColumn(row, header, "ImageLib");
                         role.CharacterImage = GetCellByColumn(row, header, "CharacterImage");
                         role.DefaultY = GetDoubleByColumn(row, header, "DefaultY");
                         role.DefaultScale = GetDoubleByColumn(row, header, "DefaultScale", 1.0);
@@ -416,16 +367,22 @@ public static class DialogueProjectService
 
             var dataRows = new List<string[]>
             {
-                new[] { "Id", "Avatar", "CharacterImage", "DefaultY", "DefaultScale" },
-                new[] { "唯一标识", "头像路径", "立绘路径" }
+                new[] { "Id", "Avatar", "ImageLib", "CharacterImage", "DefaultY", "DefaultScale" },
+                new[] { "唯一标识", "头像路径", "立绘库路径", "默认立绘", "", "" }
             };
             foreach (var role in ordered)
             {
                 dataRows.Add(new[]
                 {
                     role.Id,
+<<<<<<< HEAD
                     NormalizeImageResourcePathForExport(role.Avatar),
                     NormalizeImageResourcePathForExport(role.CharacterImage),
+=======
+                    role.Avatar,
+                    role.ImageLib,
+                    role.CharacterImage,
+>>>>>>> 1417332ea2e60c87aa1b5ca32b42a567c7ed43ae
                     FormatDouble(role.DefaultY),
                     FormatDouble(role.DefaultScale)
                 });
@@ -540,6 +497,8 @@ public static class DialogueProjectService
                     var (pureBaseScript, bg) = ExtractMetadataFromScript(rawBaseScript);
                     line.BaseScript = pureBaseScript;
                     line.BackgroundPath = GetBackgroundValue(row, header, bg);
+                    line.RoleImage1 = GetCellByColumn(row, header, "RoleImage1");
+                    line.RoleImage2 = GetCellByColumn(row, header, "RoleImage2");
                     line.EndScript = GetCellByColumn(row, header, "EndScript");
                     line.Roles = GetCellByColumn(row, header, "Roles");
                     line.IsNarrator = ToBool(GetCellByColumn(row, header, "IsNarrator"));
@@ -683,7 +642,12 @@ public static class DialogueProjectService
 
     private static string NormalizeScriptForExport(string baseScript)
     {
-        return ExtractMetadataFromScript(baseScript).pureScript;
+        return LuaScriptRuntimeService.NormalizeAliases(ExtractMetadataFromScript(baseScript).pureScript);
+    }
+
+    private static string NormalizePlainScriptForExport(string? script)
+    {
+        return LuaScriptRuntimeService.NormalizeAliases((script ?? string.Empty).Trim());
     }
 
     private static int FindColumn(string[] header, string name)
@@ -740,7 +704,7 @@ public static class DialogueProjectService
 
     private static string[] BuildDataHeader(int maxChoice)
     {
-        var cols = new List<string> { "Id", "BaseScript", "Backround", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
+        var cols = new List<string> { "Id", "BaseScript", "Background", "RoleImage1", "RoleImage2", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
         for (var i = 1; i <= maxChoice; i++)
         {
             cols.Add($"ChoiceScript{i}");
@@ -762,19 +726,6 @@ public static class DialogueProjectService
         return fallbackFromLegacyComment;
     }
 
-    private static string[] BuildDataDesc(int maxChoice)
-    {
-        var cols = new List<string>
-        {
-            "对话Id", "初始脚本", "对话结束时执行", "出现的角色Id，说话者用<>包括，用,分割", "是否旁白(TRUE/FALSE)", "何时执行对话（事件名）", "选项数量"
-        };
-        for (var i = 1; i <= maxChoice; i++)
-        {
-            cols.Add("选项脚本");
-        }
-        return cols.ToArray();
-    }
-
     private static string[] BuildTextHeader(int maxChoice)
     {
         var cols = new List<string> { "Id", "Text", "Text_en", "Text_ja" };
@@ -784,9 +735,28 @@ public static class DialogueProjectService
             cols.Add($"ChoiceText{i}_en");
             cols.Add($"ChoiceText{i}_ja");
         }
-        cols.Add("Notification");
-        cols.Add("Notification_en");
-        cols.Add("Notification_ja");
+        return cols.ToArray();
+    }
+
+    private static string[] BuildDataDescriptionRow(int maxChoice)
+    {
+        var cols = new List<string>
+        {
+            "对话Id",
+            "初始脚本",
+            "背景图路径",
+            "角色1表情差分",
+            "角色2表情差分",
+            "对话结束时执行",
+            "出现的角色Id，说话者用<>包括，用,分割",
+            "是否旁白(TRUE/FALSE)",
+            "何时执行对话（事件名）",
+            "选项数量"
+        };
+        for (var i = 1; i <= maxChoice; i++)
+        {
+            cols.Add("选项脚本");
+        }
         return cols.ToArray();
     }
 
@@ -799,15 +769,12 @@ public static class DialogueProjectService
             cols.Add("");
             cols.Add("");
         }
-        cols.Add("");
-        cols.Add("");
-        cols.Add("");
         return cols.ToArray();
     }
 
-    private static string GetChoiceScript(DialogueLine line, int index)
+    private static string GetChoiceScriptForExport(DialogueLine line, int index)
     {
-        return index switch
+        var script = index switch
         {
             1 => line.ChoiceScript1,
             2 => line.ChoiceScript2,
@@ -815,6 +782,7 @@ public static class DialogueProjectService
             4 => line.ChoiceScript4,
             _ => string.Empty
         };
+        return NormalizePlainScriptForExport(script);
     }
 
     private static string GetChoiceText(DialogueLine line, int index, string lang)

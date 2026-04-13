@@ -29,6 +29,14 @@ public sealed class GitPullMergeResult
 
 public static class ProjectGitService
 {
+    private static readonly string[] SyncableProjectImageDirectories =
+    [
+        "GameResources/Images",
+        "Resources/Images",
+        "Assets/GameResources/Images",
+        "Assets/Resources/Images"
+    ];
+
     public static string? GetPrimaryRemoteUrl(string workDir)
     {
         var root = Repository.Discover(workDir);
@@ -47,6 +55,18 @@ public static class ProjectGitService
         return repo.Network.Remotes[name]?.Url;
     }
 
+    public static string GetGitUserDisplayName(string workDir)
+    {
+        var root = Repository.Discover(workDir);
+        if (string.IsNullOrEmpty(root))
+        {
+            return GetFallbackGitUserName();
+        }
+
+        using var repo = new Repository(root);
+        return GetGitUserDisplayName(repo);
+    }
+
     public static bool IsGitRepository(string workDir)
     {
         return !string.IsNullOrEmpty(Repository.Discover(workDir));
@@ -62,6 +82,59 @@ public static class ProjectGitService
 
         using var repo = new Repository(root);
         return repo.Head.TrackingDetails?.AheadBy ?? 0;
+    }
+
+    public static IReadOnlyList<string> CollectChangedProjectImageFiles(string workDir, string projectRoot)
+    {
+        var root = Repository.Discover(workDir);
+        if (string.IsNullOrEmpty(root))
+        {
+            return Array.Empty<string>();
+        }
+
+        using var repo = new Repository(root);
+        var workRoot = Path.GetFullPath(repo.Info.WorkingDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var projectAbs = Path.GetFullPath(projectRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var projectRel = GetRepoRelativePathAllowRoot(workRoot, projectAbs);
+        if (projectRel == null)
+        {
+            return Array.Empty<string>();
+        }
+
+        var prefixes = GetProjectImageRepoPrefixes(projectRel).ToArray();
+        if (prefixes.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in repo.RetrieveStatus(new StatusOptions
+                 {
+                     IncludeUntracked = true,
+                     RecurseUntrackedDirs = true
+                 }))
+        {
+            if (!IsMeaningfulGitStatus(entry.State))
+            {
+                continue;
+            }
+
+            var repoPath = entry.FilePath.Replace('\\', '/');
+            if (!prefixes.Any(prefix => repoPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (!IsSupportedImagePath(repoPath))
+            {
+                continue;
+            }
+
+            var absolutePath = Path.GetFullPath(Path.Combine(workRoot, repoPath.Replace('/', Path.DirectorySeparatorChar)));
+            results.Add(absolutePath);
+        }
+
+        return results.ToList();
     }
 
     /// <summary>打开工程等：拉取并与远端合并；若有冲突则按远端版本自动解决。</summary>
@@ -122,19 +195,40 @@ public static class ProjectGitService
         string gitCliArguments)
     {
         var bundled = FindBundledGitLfsExecutable();
-        string fileName;
-        string arguments;
-        if (bundled != null)
+        if (!string.IsNullOrWhiteSpace(bundled))
         {
-            fileName = bundled;
-            arguments = bundledArguments;
-        }
-        else
-        {
-            fileName = "git";
-            arguments = gitCliArguments;
+            var bundledResult = TryRunProcess(repoRoot, bundled, bundledArguments);
+            if (bundledResult.Ok)
+            {
+                return (true, null);
+            }
+
+            if (!bundledResult.StartFailed)
+            {
+                return (false, bundledResult.Error);
+            }
         }
 
+        var cliResult = TryRunProcess(repoRoot, "git", gitCliArguments);
+        if (cliResult.Ok)
+        {
+            return (true, null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(bundled) && cliResult.StartFailed)
+        {
+            return (false, "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中。");
+        }
+
+        return (false, cliResult.Error);
+    }
+
+    private static (bool Ok, bool StartFailed, string? Error) TryRunProcess(
+        string workingDirectory,
+        string fileName,
+        string arguments,
+        int timeoutMs = 300_000)
+    {
         try
         {
             using var p = new Process
@@ -143,7 +237,7 @@ public static class ProjectGitService
                 {
                     FileName = fileName,
                     Arguments = arguments,
-                    WorkingDirectory = repoRoot,
+                    WorkingDirectory = workingDirectory,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -153,22 +247,22 @@ public static class ProjectGitService
             p.Start();
             var stderr = p.StandardError.ReadToEnd();
             var stdout = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(300_000);
+            p.WaitForExit(timeoutMs);
             if (p.ExitCode != 0)
             {
                 var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
                 detail = string.IsNullOrWhiteSpace(detail) ? $"退出码 {p.ExitCode}" : detail.Trim();
-                return (false, detail);
+                return (false, false, detail);
             }
 
-            return (true, null);
+            return (true, false, null);
         }
         catch (Exception ex)
         {
-            var hint = bundled != null
-                ? $"无法执行：{bundled}"
-                : "请确认已安装 Git 与 Git LFS，或将 git-lfs.exe 放在程序目录，且 git 在 PATH 中";
-            return (false, hint + "\n" + ex.Message);
+            var hint = string.Equals(fileName, "git", StringComparison.OrdinalIgnoreCase)
+                ? "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中"
+                : "程序自带 Git LFS 不可用";
+            return (false, true, hint + "\n" + ex.Message);
         }
     }
 
@@ -337,7 +431,7 @@ public static class ProjectGitService
 
         try
         {
-            repo.Commit("Merge: 冲突按远端版本解决 (VNEditor)", sig, sig, new CommitOptions());
+            repo.Commit($"Merge: 冲突按远端版本解决 ({GetGitUserDisplayName(repo)})", sig, sig, new CommitOptions());
         }
         catch (Exception ex)
         {
@@ -366,7 +460,7 @@ public static class ProjectGitService
 
         foreach (var abs in absoluteFilePaths)
         {
-            if (string.IsNullOrWhiteSpace(abs) || !File.Exists(abs))
+            if (string.IsNullOrWhiteSpace(abs))
             {
                 continue;
             }
@@ -687,8 +781,89 @@ public static class ProjectGitService
 
     private static Signature BuildSignature(Repository repo)
     {
-        return repo.Config.BuildSignature(DateTimeOffset.Now)
-               ?? new Signature("VNEditor", "vneditor@local", DateTimeOffset.Now);
+        var now = DateTimeOffset.Now;
+        var configured = repo.Config.BuildSignature(now);
+        if (configured != null)
+        {
+            return configured;
+        }
+
+        var name = GetConfiguredGitUserName(repo) ?? GetFallbackGitUserName();
+        var email = GetConfiguredGitUserEmail(repo) ?? GetFallbackGitUserEmail(name);
+        return new Signature(name, email, now);
+    }
+
+    private static string GetGitUserDisplayName(Repository repo)
+    {
+        var configured = repo.Config.BuildSignature(DateTimeOffset.Now);
+        if (!string.IsNullOrWhiteSpace(configured?.Name))
+        {
+            return configured.Name.Trim();
+        }
+
+        return GetConfiguredGitUserName(repo) ?? GetFallbackGitUserName();
+    }
+
+    private static string? GetConfiguredGitUserName(Repository repo)
+    {
+        var value = repo.Config.Get<string>("user.name")?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? GetConfiguredGitUserEmail(Repository repo)
+    {
+        var value = repo.Config.Get<string>("user.email")?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string GetFallbackGitUserName()
+    {
+        var value = Environment.UserName;
+        return string.IsNullOrWhiteSpace(value) ? "LocalUser" : value.Trim();
+    }
+
+    private static string GetFallbackGitUserEmail(string userName)
+    {
+        var localPart = SanitizeEmailLocalPart(userName);
+        return $"{localPart}@local";
+    }
+
+    private static string SanitizeEmailLocalPart(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            if (char.IsLetterOrDigit(ch) || ch is '.' or '-' or '_' or '+')
+            {
+                builder.Append(char.ToLowerInvariant(ch));
+            }
+        }
+
+        return builder.Length == 0 ? "localuser" : builder.ToString();
+    }
+
+    private static bool IsMeaningfulGitStatus(FileStatus status)
+    {
+        return status != FileStatus.Unaltered && status != FileStatus.Ignored;
+    }
+
+    private static IEnumerable<string> GetProjectImageRepoPrefixes(string projectRelativePath)
+    {
+        var prefix = projectRelativePath.Replace('\\', '/').Trim('/');
+        foreach (var dir in SyncableProjectImageDirectories)
+        {
+            yield return string.IsNullOrEmpty(prefix) ? dir : $"{prefix}/{dir}";
+        }
+    }
+
+    private static bool IsSupportedImagePath(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? GetRepoRelativePath(string repoWorkRoot, string absolutePath)
@@ -702,5 +877,18 @@ public static class ProjectGitService
 
         var rel = Path.GetRelativePath(root, full);
         return string.IsNullOrEmpty(rel) ? null : rel;
+    }
+
+    private static string? GetRepoRelativePathAllowRoot(string repoWorkRoot, string absolutePath)
+    {
+        var full = Path.GetFullPath(absolutePath);
+        var root = repoWorkRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var rel = Path.GetRelativePath(root, full);
+        return rel == "." ? string.Empty : rel;
     }
 }

@@ -98,7 +98,7 @@ public partial class MainWindow : Window
 
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "选择工程目录（含 DataConfigs，或与 .git 同级）",
+            Title = "选择工程根目录（目录下需直接包含 DataConfigs 和 GameResources）",
             AllowMultiple = false
         });
 
@@ -335,6 +335,32 @@ public partial class MainWindow : Window
         }
 
         vm.SelectedLine.BackgroundPath = string.Empty;
+    }
+
+    private async void OnPickRoleImageLibClicked(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || vm.SelectedRoleEntry == null)
+        {
+            return;
+        }
+
+        if (!vm.RoleEditingEnabled)
+        {
+            vm.StatusText = "请先签出角色数据后再编辑。";
+            return;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "选择角色 ImageLib 目录",
+            AllowMultiple = false
+        });
+
+        var path = folders.FirstOrDefault()?.TryGetLocalPath();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            vm.SetSelectedRoleEntryImageLibPath(path);
+        }
     }
 
     private async void OnEditBaseScriptClicked(object? sender, RoutedEventArgs e)

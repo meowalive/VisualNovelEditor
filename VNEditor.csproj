@@ -27,20 +27,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 将官方 zip 中的 git-lfs.exe 放在项目根目录即可随构建复制到输出/发布目录 -->
     <Content Include="git-lfs.exe" Condition="Exists('$(MSBuildProjectDirectory)\git-lfs.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <!-- 单文件发布时打进主 exe，启动解压后 AppContext.BaseDirectory 可找到 git-lfs.exe -->
       <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
     </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- 同级目录有 Witch.Extern.dll 时优先使用，否则用项目引用 -->
-    <Reference Include="Witch.Extern" Condition="Exists('$(MSBuildProjectDirectory)\Witch.Extern.dll')">
-      <HintPath>$(MSBuildProjectDirectory)\Witch.Extern.dll</HintPath>
-    </Reference>
-    <ProjectReference Include="..\..\Witch.Extern.csproj" Condition="!Exists('$(MSBuildProjectDirectory)\Witch.Extern.dll')" />
   </ItemGroup>
 </Project>
