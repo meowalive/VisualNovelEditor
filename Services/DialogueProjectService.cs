@@ -94,7 +94,7 @@ public static class DialogueProjectService
         Directory.CreateDirectory(textDir);
 
         var maxChoice = Math.Clamp(scene.Lines.Count == 0 ? 0 : scene.Lines.Max(x => x.ChoiceCount), 0, 4);
-        var dataRows = new List<string[]> { BuildDataHeader(maxChoice), BuildDataDesc(maxChoice) };
+        var dataRows = new List<string[]> { BuildDataHeader(maxChoice), BuildDataDescriptionRow(maxChoice) };
         var textRows = new List<string[]> { BuildTextHeader(maxChoice), BuildTextDesc(maxChoice) };
 
         foreach (var line in scene.Lines)
@@ -686,7 +686,7 @@ public static class DialogueProjectService
 
     private static string[] BuildDataHeader(int maxChoice)
     {
-        var cols = new List<string> { "Id", "BaseScript", "Backround", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
+        var cols = new List<string> { "Id", "BaseScript", "Background", "EndScript", "Roles", "IsNarrator", "EventName", "ChoiceCount" };
         for (var i = 1; i <= maxChoice; i++)
         {
             cols.Add($"ChoiceScript{i}");
@@ -708,19 +708,6 @@ public static class DialogueProjectService
         return fallbackFromLegacyComment;
     }
 
-    private static string[] BuildDataDesc(int maxChoice)
-    {
-        var cols = new List<string>
-        {
-            "对话Id", "初始脚本", "对话结束时执行", "出现的角色Id，说话者用<>包括，用,分割", "是否旁白(TRUE/FALSE)", "何时执行对话（事件名）", "选项数量"
-        };
-        for (var i = 1; i <= maxChoice; i++)
-        {
-            cols.Add("选项脚本");
-        }
-        return cols.ToArray();
-    }
-
     private static string[] BuildTextHeader(int maxChoice)
     {
         var cols = new List<string> { "Id", "Text", "Text_en", "Text_ja" };
@@ -733,6 +720,26 @@ public static class DialogueProjectService
         cols.Add("Notification");
         cols.Add("Notification_en");
         cols.Add("Notification_ja");
+        return cols.ToArray();
+    }
+
+    private static string[] BuildDataDescriptionRow(int maxChoice)
+    {
+        var cols = new List<string>
+        {
+            "对话Id",
+            "初始脚本",
+            "背景图路径",
+            "对话结束时执行",
+            "出现的角色Id，说话者用<>包括，用,分割",
+            "是否旁白(TRUE/FALSE)",
+            "何时执行对话（事件名）",
+            "选项数量"
+        };
+        for (var i = 1; i <= maxChoice; i++)
+        {
+            cols.Add("选项脚本");
+        }
         return cols.ToArray();
     }
 
