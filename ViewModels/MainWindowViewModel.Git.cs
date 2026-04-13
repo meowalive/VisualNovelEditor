@@ -14,18 +14,47 @@ namespace VNEditor.ViewModels;
 public partial class MainWindowViewModel
 {
     public IGitUserNotify? GitNotify { get; set; }
+    private string _gitUserDisplayName = string.Empty;
+
+    public string GitUserDisplayName
+    {
+        get => _gitUserDisplayName;
+        private set
+        {
+            if (string.Equals(_gitUserDisplayName, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _gitUserDisplayName = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GitSyncUserText));
+        }
+    }
+
+    public string GitSyncUserText =>
+        string.IsNullOrWhiteSpace(GitUserDisplayName) ? string.Empty : $"同步者：{GitUserDisplayName}";
+
+    private void RefreshGitUserDisplayName()
+    {
+        GitUserDisplayName = GitPanelEnabled && !string.IsNullOrEmpty(_projectRoot)
+            ? ProjectGitService.GetGitUserDisplayName(_projectRoot)
+            : string.Empty;
+    }
 
     private void AfterProjectOpenedForGit()
     {
         if (string.IsNullOrEmpty(_projectRoot))
         {
             GitPanelEnabled = false;
+            GitUserDisplayName = string.Empty;
             GitAheadBy = 0;
             GitStatusHint = string.Empty;
             return;
         }
 
         GitPanelEnabled = ProjectGitService.IsGitRepository(_projectRoot);
+        RefreshGitUserDisplayName();
         RefreshGitAhead();
         GitStatusHint = GitPanelEnabled
             ? (GitAheadBy > 0 ? $"未推送提交：{GitAheadBy}" : "与远端同步。")
@@ -220,11 +249,12 @@ public partial class MainWindowViewModel
             return true;
         }
 
+        RefreshGitUserDisplayName();
         var paths = _pendingGitCommitPaths.ToList();
         var (ok, err) = ProjectGitService.CommitTrackedFiles(
             _projectRoot,
             paths,
-            "VNEditor: 本地编辑");
+            $"{GitUserDisplayName}: 本地编辑");
         if (!ok)
         {
             if (GitNotify != null)
@@ -525,6 +555,7 @@ public partial class MainWindowViewModel
 
     partial void OnGitPanelEnabledChanged(bool value)
     {
+        RefreshGitUserDisplayName();
         GitCheckoutSceneFilesCommand.NotifyCanExecuteChanged();
         GitCheckoutRoleFilesCommand.NotifyCanExecuteChanged();
         GitPullAllCommand.NotifyCanExecuteChanged();

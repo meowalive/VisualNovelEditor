@@ -208,6 +208,9 @@
                                             HorizontalAlignment="Stretch"
                                             HorizontalContentAlignment="Center"
                                             ToolTip.Tip="从远端跟踪分支拉取当前场景的 Data/Text CSV 并覆盖本地"/>
+                                    <TextBlock Text="{Binding GitSyncUserText}"
+                                               Foreground="{Binding ThemeTextMuted}"
+                                               TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Button Content="拉取全部" Command="{Binding GitPullAllCommand}" IsEnabled="{Binding GitUiIdle}" ToolTip.Tip="fetch 合并远端（冲突按远端）；并执行 git lfs pull"/>
                                         <Button Content="上传" Command="{Binding GitPushCommand}" IsEnabled="{Binding GitUiIdle}" ToolTip.Tip="推送本地提交到远端"/>

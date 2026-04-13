@@ -47,6 +47,18 @@ public static class ProjectGitService
         return repo.Network.Remotes[name]?.Url;
     }
 
+    public static string GetGitUserDisplayName(string workDir)
+    {
+        var root = Repository.Discover(workDir);
+        if (string.IsNullOrEmpty(root))
+        {
+            return GetFallbackGitUserName();
+        }
+
+        using var repo = new Repository(root);
+        return GetGitUserDisplayName(repo);
+    }
+
     public static bool IsGitRepository(string workDir)
     {
         return !string.IsNullOrEmpty(Repository.Discover(workDir));
@@ -337,7 +349,7 @@ public static class ProjectGitService
 
         try
         {
-            repo.Commit("Merge: 冲突按远端版本解决 (VNEditor)", sig, sig, new CommitOptions());
+            repo.Commit($"Merge: 冲突按远端版本解决 ({GetGitUserDisplayName(repo)})", sig, sig, new CommitOptions());
         }
         catch (Exception ex)
         {
@@ -687,8 +699,65 @@ public static class ProjectGitService
 
     private static Signature BuildSignature(Repository repo)
     {
-        return repo.Config.BuildSignature(DateTimeOffset.Now)
-               ?? new Signature("VNEditor", "vneditor@local", DateTimeOffset.Now);
+        var now = DateTimeOffset.Now;
+        var configured = repo.Config.BuildSignature(now);
+        if (configured != null)
+        {
+            return configured;
+        }
+
+        var name = GetConfiguredGitUserName(repo) ?? GetFallbackGitUserName();
+        var email = GetConfiguredGitUserEmail(repo) ?? GetFallbackGitUserEmail(name);
+        return new Signature(name, email, now);
+    }
+
+    private static string GetGitUserDisplayName(Repository repo)
+    {
+        var configured = repo.Config.BuildSignature(DateTimeOffset.Now);
+        if (!string.IsNullOrWhiteSpace(configured?.Name))
+        {
+            return configured.Name.Trim();
+        }
+
+        return GetConfiguredGitUserName(repo) ?? GetFallbackGitUserName();
+    }
+
+    private static string? GetConfiguredGitUserName(Repository repo)
+    {
+        var value = repo.Config.Get<string>("user.name")?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? GetConfiguredGitUserEmail(Repository repo)
+    {
+        var value = repo.Config.Get<string>("user.email")?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string GetFallbackGitUserName()
+    {
+        var value = Environment.UserName;
+        return string.IsNullOrWhiteSpace(value) ? "LocalUser" : value.Trim();
+    }
+
+    private static string GetFallbackGitUserEmail(string userName)
+    {
+        var localPart = SanitizeEmailLocalPart(userName);
+        return $"{localPart}@local";
+    }
+
+    private static string SanitizeEmailLocalPart(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            if (char.IsLetterOrDigit(ch) || ch is '.' or '-' or '_' or '+')
+            {
+                builder.Append(char.ToLowerInvariant(ch));
+            }
+        }
+
+        return builder.Length == 0 ? "localuser" : builder.ToString();
     }
 
     private static string? GetRepoRelativePath(string repoWorkRoot, string absolutePath)
