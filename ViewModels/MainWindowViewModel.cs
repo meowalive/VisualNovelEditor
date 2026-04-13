@@ -862,14 +862,31 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 RefreshFilteredRoleEntries();
             }
+
+            RefreshRoleMapsAndOptions(rebuildImageOptions: true);
+            return;
         }
 
-        RefreshRoleMapsAndOptions();
+        if (e.PropertyName == nameof(RoleEntry.ImageLib))
+        {
+            RefreshRoleMapsAndOptions(rebuildImageOptions: true);
+            return;
+        }
+
+        if (e.PropertyName == nameof(RoleEntry.Name)
+            || e.PropertyName == nameof(RoleEntry.CharacterImage)
+            || e.PropertyName == nameof(RoleEntry.DefaultY)
+            || e.PropertyName == nameof(RoleEntry.DefaultScale))
+        {
+            RefreshRoleMapsAndOptions(rebuildImageOptions: false);
+            return;
+        }
     }
 
-    private void RefreshRoleMapsAndOptions()
+    private void RefreshRoleMapsAndOptions(bool rebuildImageOptions = true)
     {
         _roleCharacterImageMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var previousImageOptionsMap = _roleImageOptionsMap;
         _roleImageOptionsMap = new Dictionary<string, List<ImageOption>>(StringComparer.OrdinalIgnoreCase);
         _roleNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _roleDefaultYMap = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -886,7 +903,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
             var optionId = BuildRoleOptionId(role);
             var rawId = ExtractSuffixId(optionId);
-            var imageOptions = BuildImageOptionsForRole(role);
+            var imageOptions = rebuildImageOptions
+                ? BuildImageOptionsForRole(role)
+                : GetExistingImageOptions(previousImageOptionsMap, optionId, role.Id, rawId);
 
             if (!string.IsNullOrWhiteSpace(role.CharacterImage))
             {
@@ -971,6 +990,30 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         return options;
+    }
+
+    private static List<ImageOption> GetExistingImageOptions(
+        IReadOnlyDictionary<string, List<ImageOption>> imageOptionsMap,
+        string optionId,
+        string roleId,
+        string rawId)
+    {
+        if (imageOptionsMap.TryGetValue(optionId, out var byOptionId))
+        {
+            return byOptionId;
+        }
+
+        if (imageOptionsMap.TryGetValue(roleId, out var byRoleId))
+        {
+            return byRoleId;
+        }
+
+        if (imageOptionsMap.TryGetValue(rawId, out var byRawId))
+        {
+            return byRawId;
+        }
+
+        return new List<ImageOption>();
     }
 
     private void RefreshRoleEntryImageOptions()
@@ -2297,6 +2340,22 @@ public partial class MainWindowViewModel : ViewModelBase
         old?.Dispose();
     }
 
+    public void SetSelectedRoleEntryImageLibPath(string? path)
+    {
+        if (SelectedRoleEntry == null || string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var full = Path.GetFullPath(path);
+        if (!Directory.Exists(full))
+        {
+            return;
+        }
+
+        SelectedRoleEntry.ImageLib = BuildStoredDirectoryPath(full);
+    }
+
     private string BuildStoredBackgroundPath(string inputPath, string resolvedPath)
     {
         if (!Path.IsPathRooted(inputPath))
@@ -2322,6 +2381,52 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         return resolvedPath;
+    }
+
+    private string BuildStoredDirectoryPath(string resolvedPath)
+    {
+        var normalized = Path.GetFullPath(resolvedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        foreach (var root in EnumeratePreferredStorageRoots())
+        {
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            {
+                continue;
+            }
+
+            var fullRoot = Path.GetFullPath(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!normalized.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var relative = Path.GetRelativePath(fullRoot, normalized).Replace('\\', '/');
+            if (!string.IsNullOrWhiteSpace(relative) && relative != ".")
+            {
+                return relative;
+            }
+        }
+
+        return normalized;
+    }
+
+    private IEnumerable<string> EnumeratePreferredStorageRoots()
+    {
+        if (!string.IsNullOrWhiteSpace(_gameResourcesRoot))
+        {
+            yield return _gameResourcesRoot;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_resourcesRoot))
+        {
+            yield return _resourcesRoot;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_projectRoot))
+        {
+            yield return Path.Combine(_projectRoot, "GameResources");
+            yield return Path.Combine(_projectRoot, "Resources");
+            yield return _projectRoot;
+        }
     }
 
     private void LoadEditorSettings()
