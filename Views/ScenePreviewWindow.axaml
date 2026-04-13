@@ -29,7 +29,7 @@
         <Grid Grid.Row="1" PointerPressed="OnPreviewPointerPressed">
             <Image Source="{Binding PreviewBackground}" Stretch="UniformToFill"/>
 
-            <Grid VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseSinglePortrait}">
+            <Grid VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseSinglePortrait}" Opacity="{Binding PreviewSinglePortraitOpacity}">
                 <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
                     <Grid.RenderTransform>
                         <TransformGroup>
@@ -47,7 +47,7 @@
             </Grid>
 
             <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseDualPortrait}">
-                <Grid Grid.Column="0" IsVisible="{Binding PreviewPortrait1Visible}">
+                <Grid Grid.Column="0" IsVisible="{Binding PreviewPortrait1Visible}" Opacity="{Binding PreviewPortrait1Opacity}">
                     <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
                         <Grid.RenderTransform>
                             <TransformGroup>
@@ -63,7 +63,7 @@
                         </Border>
                     </Grid>
                 </Grid>
-                <Grid Grid.Column="1" IsVisible="{Binding PreviewPortrait2Visible}">
+                <Grid Grid.Column="1" IsVisible="{Binding PreviewPortrait2Visible}" Opacity="{Binding PreviewPortrait2Opacity}">
                     <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
                         <Grid.RenderTransform>
                             <TransformGroup>

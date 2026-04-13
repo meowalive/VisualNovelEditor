@@ -15,7 +15,8 @@ public enum PortraitVisualCommandType
 {
     MoveX = 0,
     MoveY = 1,
-    Scale = 2
+    Scale = 2,
+    Opacity = 3
 }
 
 public readonly record struct PortraitVisualCommand(
@@ -35,6 +36,8 @@ public static class LuaScriptRuntimeService
         new("DoMoveX", "移动X", "index, x, time, delay", """__vn_add_visual_command("MoveX", index, x, time, delay)"""),
         new("DoMoveY", "移动Y", "index, x, time, delay", """__vn_add_visual_command("MoveY", index, x, time, delay)"""),
         new("DoScale", "缩放", "index, x, time, delay", """__vn_add_visual_command("Scale", index, x, time, delay)"""),
+        new("DoFadeIn", "立绘淡入", "index, time", """__vn_add_visual_command("Opacity", index, 1, time, 0)"""),
+        new("DoFadeOut", "立绘淡出", "index, time", """__vn_add_visual_command("Opacity", index, 0, time, 0)"""),
     };
 
     private static readonly Regex InvocationRegex = new(
@@ -81,6 +84,30 @@ public static class LuaScriptRuntimeService
             {
                 script = script.Replace(def.Alias, def.Name, StringComparison.Ordinal);
             }
+        }
+
+        return script;
+    }
+
+    public static string ToDisplayAliases(string script)
+    {
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return script;
+        }
+
+        foreach (var def in MethodDefs)
+        {
+            if (string.IsNullOrEmpty(def.Alias))
+            {
+                continue;
+            }
+
+            script = Regex.Replace(
+                script,
+                $@"(?<![\w\u0080-\uFFFF]){Regex.Escape(def.Name)}(?=\s*\()",
+                def.Alias,
+                RegexOptions.CultureInvariant);
         }
 
         return script;
@@ -329,6 +356,9 @@ public static class LuaScriptRuntimeService
                 return true;
             case "Scale":
                 type = PortraitVisualCommandType.Scale;
+                return true;
+            case "Opacity":
+                type = PortraitVisualCommandType.Opacity;
                 return true;
             default:
                 type = PortraitVisualCommandType.MoveX;

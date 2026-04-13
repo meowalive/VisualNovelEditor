@@ -106,7 +106,7 @@ public static class DialogueProjectService
                 line.BackgroundPath,
                 line.RoleImage1,
                 line.RoleImage2,
-                line.EndScript,
+                NormalizePlainScriptForExport(line.EndScript),
                 NormalizeRolesForExport(line.Roles, validRoleIds),
                 line.IsNarrator ? "TRUE" : "FALSE",
                 line.EventName,
@@ -114,7 +114,7 @@ public static class DialogueProjectService
             };
             for (var i = 1; i <= maxChoice; i++)
             {
-                dataRow.Add(GetChoiceScript(line, i));
+                dataRow.Add(GetChoiceScriptForExport(line, i));
             }
             dataRows.Add(dataRow.ToArray());
 
@@ -131,9 +131,6 @@ public static class DialogueProjectService
                 textRow.Add(GetChoiceText(line, i, "en"));
                 textRow.Add(GetChoiceText(line, i, "ja"));
             }
-            textRow.Add(string.Empty);
-            textRow.Add(string.Empty);
-            textRow.Add(string.Empty);
             textRows.Add(textRow.ToArray());
         }
 
@@ -635,7 +632,12 @@ public static class DialogueProjectService
 
     private static string NormalizeScriptForExport(string baseScript)
     {
-        return ExtractMetadataFromScript(baseScript).pureScript;
+        return LuaScriptRuntimeService.NormalizeAliases(ExtractMetadataFromScript(baseScript).pureScript);
+    }
+
+    private static string NormalizePlainScriptForExport(string? script)
+    {
+        return LuaScriptRuntimeService.NormalizeAliases((script ?? string.Empty).Trim());
     }
 
     private static int FindColumn(string[] header, string name)
@@ -723,9 +725,6 @@ public static class DialogueProjectService
             cols.Add($"ChoiceText{i}_en");
             cols.Add($"ChoiceText{i}_ja");
         }
-        cols.Add("Notification");
-        cols.Add("Notification_en");
-        cols.Add("Notification_ja");
         return cols.ToArray();
     }
 
@@ -760,15 +759,12 @@ public static class DialogueProjectService
             cols.Add("");
             cols.Add("");
         }
-        cols.Add("");
-        cols.Add("");
-        cols.Add("");
         return cols.ToArray();
     }
 
-    private static string GetChoiceScript(DialogueLine line, int index)
+    private static string GetChoiceScriptForExport(DialogueLine line, int index)
     {
-        return index switch
+        var script = index switch
         {
             1 => line.ChoiceScript1,
             2 => line.ChoiceScript2,
@@ -776,6 +772,7 @@ public static class DialogueProjectService
             4 => line.ChoiceScript4,
             _ => string.Empty
         };
+        return NormalizePlainScriptForExport(script);
     }
 
     private static string GetChoiceText(DialogueLine line, int index, string lang)

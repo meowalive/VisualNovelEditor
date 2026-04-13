@@ -43,6 +43,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [ObservableProperty] private bool previewUseDualPortrait;
     [ObservableProperty] private Bitmap? previewSinglePortrait;
     [ObservableProperty] private bool previewSinglePortraitDim;
+    [ObservableProperty] private double previewPortrait1Opacity = 1.0;
+    [ObservableProperty] private double previewPortrait2Opacity = 1.0;
+    [ObservableProperty] private double previewSinglePortraitOpacity = 1.0;
     [ObservableProperty] private double previewPortrait1OffsetX;
     [ObservableProperty] private double previewPortrait1OffsetY;
     [ObservableProperty] private double previewPortrait1Scale = 1.0;
@@ -403,6 +406,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             PreviewSinglePortrait = null;
             PreviewSinglePortraitDim = false;
+            PreviewSinglePortraitOpacity = 1.0;
             PreviewSinglePortraitOffsetX = 0;
             PreviewSinglePortraitOffsetY = 0;
             PreviewSinglePortraitScale = 1.0;
@@ -413,12 +417,14 @@ public partial class ScenePreviewViewModel : ViewModelBase
         {
             PreviewSinglePortrait = PreviewPortrait1;
             PreviewSinglePortraitDim = PreviewPortrait1Dim;
+            PreviewSinglePortraitOpacity = PreviewPortrait1Opacity;
             SyncSinglePortraitTransform(1);
         }
         else
         {
             PreviewSinglePortrait = PreviewPortrait2;
             PreviewSinglePortraitDim = PreviewPortrait2Dim;
+            PreviewSinglePortraitOpacity = PreviewPortrait2Opacity;
             SyncSinglePortraitTransform(2);
         }
     }
@@ -438,6 +444,9 @@ public partial class ScenePreviewViewModel : ViewModelBase
         PreviewUseDualPortrait = false;
         PreviewSinglePortrait = null;
         PreviewSinglePortraitDim = false;
+        PreviewPortrait1Opacity = 1.0;
+        PreviewPortrait2Opacity = 1.0;
+        PreviewSinglePortraitOpacity = 1.0;
         PreviewPortrait1OffsetX = 0;
         PreviewPortrait1OffsetY = 0;
         PreviewPortrait1Scale = 1.0;
@@ -527,7 +536,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
             }
         }
 
-        ApplySlotTransform(slot, 0, defaultY, defaultScale);
+        ApplySlotTransform(slot, 0, defaultY, defaultScale, 1.0);
     }
 
     private void ApplyVisualCommands(string? script)
@@ -612,6 +621,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
                 PortraitVisualCommandType.MoveX => state.X,
                 PortraitVisualCommandType.MoveY => state.Y,
                 PortraitVisualCommandType.Scale => state.Scale,
+                PortraitVisualCommandType.Opacity => state.Opacity,
                 _ => 0
             };
         }
@@ -627,6 +637,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
                 PortraitVisualCommandType.MoveX => command.Value,
                 PortraitVisualCommandType.MoveY => state.DefaultY + command.Value,
                 PortraitVisualCommandType.Scale => command.Value,
+                PortraitVisualCommandType.Opacity => command.Value,
                 _ => command.Value
             };
         }
@@ -637,6 +648,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         double x;
         double y;
         double scale;
+        double opacity;
         lock (_portraitStateSync)
         {
             var state = _portraitStates[slot - 1];
@@ -651,29 +663,35 @@ public partial class ScenePreviewViewModel : ViewModelBase
                 case PortraitVisualCommandType.Scale:
                     state.Scale = value;
                     break;
+                case PortraitVisualCommandType.Opacity:
+                    state.Opacity = Math.Clamp(value, 0, 1);
+                    break;
             }
 
             x = state.X;
             y = state.Y;
             scale = state.Scale;
+            opacity = state.Opacity;
         }
 
-        ApplySlotTransform(slot, x, y, scale);
+        ApplySlotTransform(slot, x, y, scale, opacity);
     }
 
-    private void ApplySlotTransform(int slot, double x, double y, double scale)
+    private void ApplySlotTransform(int slot, double x, double y, double scale, double opacity)
     {
         if (slot == 1)
         {
             PreviewPortrait1OffsetX = x;
             PreviewPortrait1OffsetY = y;
             PreviewPortrait1Scale = scale;
+            PreviewPortrait1Opacity = opacity;
         }
         else
         {
             PreviewPortrait2OffsetX = x;
             PreviewPortrait2OffsetY = y;
             PreviewPortrait2Scale = scale;
+            PreviewPortrait2Opacity = opacity;
         }
 
         SyncSinglePortraitTransform(PreviewPortrait1Visible ? 1 : 2);
@@ -691,12 +709,14 @@ public partial class ScenePreviewViewModel : ViewModelBase
             PreviewSinglePortraitOffsetX = PreviewPortrait1OffsetX;
             PreviewSinglePortraitOffsetY = PreviewPortrait1OffsetY;
             PreviewSinglePortraitScale = PreviewPortrait1Scale;
+            PreviewSinglePortraitOpacity = PreviewPortrait1Opacity;
         }
         else if (slot == 2 && PreviewPortrait2Visible)
         {
             PreviewSinglePortraitOffsetX = PreviewPortrait2OffsetX;
             PreviewSinglePortraitOffsetY = PreviewPortrait2OffsetY;
             PreviewSinglePortraitScale = PreviewPortrait2Scale;
+            PreviewSinglePortraitOpacity = PreviewPortrait2Opacity;
         }
     }
 
