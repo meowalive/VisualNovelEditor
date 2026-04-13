@@ -217,8 +217,7 @@ public static class ProjectGitService
 
         if (!string.IsNullOrWhiteSpace(bundled) && cliResult.StartFailed)
         {
-            return (false,
-                $"无法执行：{bundled}\n{cliResult.Error}");
+            return (false, "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中。");
         }
 
         return (false, cliResult.Error);
@@ -262,7 +261,7 @@ public static class ProjectGitService
         {
             var hint = string.Equals(fileName, "git", StringComparison.OrdinalIgnoreCase)
                 ? "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中"
-                : $"无法执行：{fileName}";
+                : "程序自带 Git LFS 不可用";
             return (false, true, hint + "\n" + ex.Message);
         }
     }
