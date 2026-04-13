@@ -157,7 +157,7 @@ public static class DialogueProjectService
             {
                 line.CsvId,
                 NormalizeScriptForExport(line.BaseScript),
-                line.BackgroundPath,
+                NormalizeImageResourcePathForExport(line.BackgroundPath),
                 line.EndScript,
                 NormalizeRolesForExport(line.Roles, validRoleIds),
                 line.IsNarrator ? "TRUE" : "FALSE",
@@ -424,8 +424,8 @@ public static class DialogueProjectService
                 dataRows.Add(new[]
                 {
                     role.Id,
-                    role.Avatar,
-                    role.CharacterImage,
+                    NormalizeImageResourcePathForExport(role.Avatar),
+                    NormalizeImageResourcePathForExport(role.CharacterImage),
                     FormatDouble(role.DefaultY),
                     FormatDouble(role.DefaultScale)
                 });
@@ -874,6 +874,27 @@ public static class DialogueProjectService
         }
 
         return string.Join(",", result);
+    }
+
+    private static string NormalizeImageResourcePathForExport(string rawPath)
+    {
+        if (string.IsNullOrWhiteSpace(rawPath))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = rawPath.Trim();
+        var ext = Path.GetExtension(trimmed);
+        if (ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.ChangeExtension(trimmed, null) ?? trimmed;
+        }
+
+        return trimmed;
     }
 
     private static bool IsRoleValid(string roleId, ISet<string> validRoleIds)
