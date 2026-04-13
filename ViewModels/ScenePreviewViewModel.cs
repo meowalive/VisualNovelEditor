@@ -94,7 +94,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
     [RelayCommand]
     private void LeftClick()
     {
-        if (TryCompletePreviewTypewriter())
+        if (PreviewDialogueBoxVisible && TryCompletePreviewTypewriter())
         {
             return;
         }
@@ -104,7 +104,8 @@ public partial class ScenePreviewViewModel : ViewModelBase
             return;
         }
 
-        if (PreviewChoice1Visible || PreviewChoice2Visible || PreviewChoice3Visible || PreviewChoice4Visible)
+        if (PreviewDialogueBoxVisible
+            && (PreviewChoice1Visible || PreviewChoice2Visible || PreviewChoice3Visible || PreviewChoice4Visible))
         {
             return;
         }
@@ -118,7 +119,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(line.EndScript))
         {
-            MoveTo(_playingIndex + 1);
+            MoveToDefaultNextOrFinish();
             return;
         }
 
@@ -160,7 +161,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         var script = GetChoiceScriptByIndex(line, idx);
         if (string.IsNullOrWhiteSpace(script))
         {
-            MoveTo(_playingIndex + 1);
+            MoveToDefaultNextOrFinish();
             return;
         }
 
@@ -184,7 +185,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(line.EndScript))
         {
-            MoveTo(_playingIndex + 1);
+            MoveToDefaultNextOrFinish();
             return;
         }
 
@@ -242,7 +243,7 @@ public partial class ScenePreviewViewModel : ViewModelBase
         }
 
         PreviewText = line.Text;
-        StartPreviewTypewriter(line.Text);
+        StartPreviewTypewriter(line.Text, animate: PreviewDialogueBoxVisible);
         SetPreviewBackground(line.BackgroundPath, keepWhenEmpty: true);
         SetPortraits(line.Roles, line.IsNarrator);
         ApplyVisualCommands(line.BaseScript);
@@ -276,6 +277,17 @@ public partial class ScenePreviewViewModel : ViewModelBase
         PreviewChoice2Visible = false;
         PreviewChoice3Visible = false;
         PreviewChoice4Visible = false;
+    }
+
+    private void MoveToDefaultNextOrFinish()
+    {
+        if (DialogueNavigationService.TryResolveDefaultNextIndex(_scene.Lines, _playingIndex, out var nextIndex))
+        {
+            MoveTo(nextIndex);
+            return;
+        }
+
+        EndPreview("鍦烘櫙鎾斁瀹屾垚銆?");
     }
 
     private void SetPreviewBackground(string rawPath, bool keepWhenEmpty)
@@ -706,13 +718,20 @@ public partial class ScenePreviewViewModel : ViewModelBase
         return from + ((to - from) * progress);
     }
 
-    private void StartPreviewTypewriter(string? text)
+    private void StartPreviewTypewriter(string? text, bool animate = true)
     {
         CancelPendingPreviewTypewriter();
         var totalVisibleCharacters = DialogueTextUtility.CountVisibleCharacters(text);
         if (totalVisibleCharacters <= 0)
         {
             PreviewVisibleCharacterCount = -1;
+            IsPreviewTyping = false;
+            return;
+        }
+
+        if (!animate)
+        {
+            PreviewVisibleCharacterCount = totalVisibleCharacters;
             IsPreviewTyping = false;
             return;
         }

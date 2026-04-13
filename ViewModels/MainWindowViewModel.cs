@@ -1049,7 +1049,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void PreviewLeftClick()
     {
-        if (TryCompletePreviewTypewriter())
+        if (PreviewDialogueBoxVisible && TryCompletePreviewTypewriter())
         {
             return;
         }
@@ -1059,7 +1059,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        if (PreviewChoice1Visible || PreviewChoice2Visible || PreviewChoice3Visible || PreviewChoice4Visible)
+        if (PreviewDialogueBoxVisible
+            && (PreviewChoice1Visible || PreviewChoice2Visible || PreviewChoice3Visible || PreviewChoice4Visible))
         {
             return;
         }
@@ -1073,7 +1074,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(line.EndScript))
         {
-            MoveToPlayIndex(_playingIndex + 1);
+            MoveToDefaultNextPlayLineOrStop();
             return;
         }
 
@@ -1138,7 +1139,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(script))
         {
-            MoveToPlayIndex(_playingIndex + 1);
+            MoveToDefaultNextPlayLineOrStop();
             return;
         }
 
@@ -1165,7 +1166,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var endScript = line.EndScript;
         if (string.IsNullOrWhiteSpace(endScript))
         {
-            MoveToPlayIndex(_playingIndex + 1);
+            MoveToDefaultNextPlayLineOrStop();
             return;
         }
 
@@ -1291,6 +1292,19 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplyCurrentPlayLine();
     }
 
+    private void MoveToDefaultNextPlayLineOrStop()
+    {
+        if (_playingScene != null
+            && DialogueNavigationService.TryResolveDefaultNextIndex(_playingScene.Lines, _playingIndex, out var nextIndex))
+        {
+            MoveToPlayIndex(nextIndex);
+            return;
+        }
+
+        StatusText = "场景播放完成。";
+        StopScenePlay();
+    }
+
     private void SetupChoices(DialogueLine line)
     {
         var count = Math.Clamp(line.ChoiceCount, 0, 4);
@@ -1317,7 +1331,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         PreviewSpeaker = string.IsNullOrWhiteSpace(line.Roles) ? "旁白" : line.Roles;
         PreviewText = line.Text;
-        StartPreviewTypewriter(line.Text);
+        StartPreviewTypewriter(line.Text, animate: PreviewDialogueBoxVisible);
 
         SetPreviewBackgroundByRaw(line.BackgroundPath, keepBackgroundWhenEmpty);
         SetPreviewPortraitByRole(line);
@@ -1734,13 +1748,20 @@ public partial class MainWindowViewModel : ViewModelBase
         return from + ((to - from) * progress);
     }
 
-    private void StartPreviewTypewriter(string? text)
+    private void StartPreviewTypewriter(string? text, bool animate = true)
     {
         CancelPendingPreviewTypewriter();
         var totalVisibleCharacters = DialogueTextUtility.CountVisibleCharacters(text);
         if (totalVisibleCharacters <= 0)
         {
             PreviewVisibleCharacterCount = -1;
+            IsPreviewTyping = false;
+            return;
+        }
+
+        if (!animate)
+        {
+            PreviewVisibleCharacterCount = totalVisibleCharacters;
             IsPreviewTyping = false;
             return;
         }
