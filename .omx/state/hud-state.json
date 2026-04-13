@@ -1,6 +1,6 @@
 {
-  "last_turn_at": "2026-04-13T13:47:21.674Z",
-  "turn_count": 5,
-  "last_progress_at": "2026-04-13T13:47:21.674Z",
-  "last_agent_output": "{\"message\":\"Strip exported image extensions for Unity resource loading\"}"
+  "last_turn_at": "2026-04-13T14:02:14.690Z",
+  "turn_count": 7,
+  "last_progress_at": "2026-04-13T14:02:14.690Z",
+  "last_agent_output": "{\"message\":\"Resolve export merge conflicts for Unity image paths\"}"
 }

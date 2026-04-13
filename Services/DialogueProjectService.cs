@@ -103,15 +103,10 @@ public static class DialogueProjectService
             {
                 line.CsvId,
                 NormalizeScriptForExport(line.BaseScript),
-<<<<<<< HEAD
                 NormalizeImageResourcePathForExport(line.BackgroundPath),
-                line.EndScript,
-=======
-                line.BackgroundPath,
-                line.RoleImage1,
-                line.RoleImage2,
+                NormalizeImageResourcePathForExport(line.RoleImage1),
+                NormalizeImageResourcePathForExport(line.RoleImage2),
                 NormalizePlainScriptForExport(line.EndScript),
->>>>>>> 1417332ea2e60c87aa1b5ca32b42a567c7ed43ae
                 NormalizeRolesForExport(line.Roles, validRoleIds),
                 line.IsNarrator ? "TRUE" : "FALSE",
                 line.EventName,
@@ -375,14 +370,9 @@ public static class DialogueProjectService
                 dataRows.Add(new[]
                 {
                     role.Id,
-<<<<<<< HEAD
                     NormalizeImageResourcePathForExport(role.Avatar),
-                    NormalizeImageResourcePathForExport(role.CharacterImage),
-=======
-                    role.Avatar,
                     role.ImageLib,
-                    role.CharacterImage,
->>>>>>> 1417332ea2e60c87aa1b5ca32b42a567c7ed43ae
+                    NormalizeImageResourcePathForExport(role.CharacterImage),
                     FormatDouble(role.DefaultY),
                     FormatDouble(role.DefaultScale)
                 });
