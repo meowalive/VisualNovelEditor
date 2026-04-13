@@ -4,12 +4,12 @@ using System.IO;
 
 namespace VNEditor.Services;
 
-/// <summary>对话背景、立绘等相对路径解析（支持 Assets 与 DataConfigs 镜像目录）。</summary>
+/// <summary>对话背景、立绘等相对路径解析（支持工程根与 Assets 下的资源目录）。</summary>
 public static class ResourcePathResolver
 {
-    /// <param name="projectRoot">含 DataConfigs、与 .git 同级的工程根。</param>
-    /// <param name="resourcesRoot">通常为 Assets/Resources。</param>
-    /// <param name="gameResourcesRoot">通常为 Assets/GameResources。</param>
+    /// <param name="projectRoot">工程根，通常直接包含 DataConfigs 与 GameResources。</param>
+    /// <param name="resourcesRoot">通常为工程根/Resources 或 Assets/Resources。</param>
+    /// <param name="gameResourcesRoot">通常为工程根/GameResources 或 Assets/GameResources。</param>
     public static string Resolve(
         string? rawPath,
         string projectRoot,
@@ -54,8 +54,8 @@ public static class ResourcePathResolver
 
         if (!string.IsNullOrWhiteSpace(projectRoot))
         {
-            candidates.Add(Path.Combine(projectRoot, "DataConfigs", "Resources", rawPath));
-            candidates.Add(Path.Combine(projectRoot, "DataConfigs", "GameResources", rawPath));
+            candidates.Add(Path.Combine(projectRoot, "Resources", rawPath));
+            candidates.Add(Path.Combine(projectRoot, "GameResources", rawPath));
             candidates.Add(Path.Combine(projectRoot, rawPath));
             var assetsRoot = Path.Combine(projectRoot, "Assets");
             if (Directory.Exists(assetsRoot))

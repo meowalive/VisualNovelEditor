@@ -13,7 +13,7 @@ public static class DialogueProjectService
     private const string LegacyBgMetaPrefix = "//VNEditor:BG=";
     private static readonly string[] BackgroundColumnNames = ["Backround", "Background", "BackgroundPath"];
 
-    /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue（与 .git 同级的是工程根）。</summary>
+    /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue。</summary>
     public static string GetDialogueDataDir(string projectRoot) =>
         Path.Combine(projectRoot, "DataConfigs", "Data", "Dialogue");
 
@@ -28,8 +28,8 @@ public static class DialogueProjectService
         Path.Combine(projectRoot, "DataConfigs", "Text", "RoleData");
 
     /// <summary>
-    /// 解析工程：在选中路径下定位 <c>DataConfigs/Data/Dialogue</c> 与 <c>DataConfigs/Text/Dialogue</c>，
-    /// 返回的 <c>projectRoot</c> 为包含 <c>DataConfigs</c> 的目录（与仓库 .git 同级）。
+    /// 解析工程：用户选中的目录本身必须就是工程根，且其下直接包含
+    /// <c>DataConfigs</c> 与 <c>GameResources</c>。
     /// </summary>
     public static (string dataDir, string textDir, string projectRoot)? ResolveProjectDirs(string selectedPath)
     {
@@ -38,73 +38,19 @@ public static class DialogueProjectService
             return null;
         }
 
-        var full = Path.GetFullPath(selectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-
-        // 1) 选中文件夹即为 DataConfigs
-        if (Path.GetFileName(full).Equals("DataConfigs", StringComparison.OrdinalIgnoreCase))
+        var projectRoot = Path.GetFullPath(selectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var childDataConfigs = Path.Combine(projectRoot, "DataConfigs");
+        var gameResourcesDir = Path.Combine(projectRoot, "GameResources");
+        if (!Directory.Exists(childDataConfigs) || !Directory.Exists(gameResourcesDir))
         {
-            var projectRoot = Directory.GetParent(full)?.FullName;
-            if (string.IsNullOrEmpty(projectRoot))
-            {
-                return null;
-            }
-
-            var dataDir = Path.Combine(full, "Data", "Dialogue");
-            var textDir = Path.Combine(full, "Text", "Dialogue");
-            if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-            {
-                return (dataDir, textDir, projectRoot);
-            }
-
             return null;
         }
 
-        // 2) 工程根：直接包含 DataConfigs 子目录
-        var childDataConfigs = Path.Combine(full, "DataConfigs");
-        if (Directory.Exists(childDataConfigs))
-        {
-            var dataDir = Path.Combine(childDataConfigs, "Data", "Dialogue");
-            var textDir = Path.Combine(childDataConfigs, "Text", "Dialogue");
-            if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-            {
-                return (dataDir, textDir, full);
-            }
-
-            return null;
-        }
-
-        // 3) 向上查找：某级目录下存在 DataConfigs，或当前位于 DataConfigs 子树内
-        for (var dir = new DirectoryInfo(full); dir != null; dir = dir.Parent)
-        {
-            var tryDc = Path.Combine(dir.FullName, "DataConfigs");
-            if (Directory.Exists(tryDc))
-            {
-                var dataDir = Path.Combine(tryDc, "Data", "Dialogue");
-                var textDir = Path.Combine(tryDc, "Text", "Dialogue");
-                if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-                {
-                    return (dataDir, textDir, dir.FullName);
-                }
-            }
-
-            if (dir.Name.Equals("DataConfigs", StringComparison.OrdinalIgnoreCase))
-            {
-                var dataDir = Path.Combine(dir.FullName, "Data", "Dialogue");
-                var textDir = Path.Combine(dir.FullName, "Text", "Dialogue");
-                if (Directory.Exists(dataDir) && Directory.Exists(textDir))
-                {
-                    var projectRoot = dir.Parent?.FullName;
-                    if (!string.IsNullOrEmpty(projectRoot))
-                    {
-                        return (dataDir, textDir, projectRoot);
-                    }
-                }
-
-                return null;
-            }
-        }
-
-        return null;
+        var dataDir = Path.Combine(childDataConfigs, "Data", "Dialogue");
+        var textDir = Path.Combine(childDataConfigs, "Text", "Dialogue");
+        return Directory.Exists(dataDir) && Directory.Exists(textDir)
+            ? (dataDir, textDir, projectRoot)
+            : null;
     }
 
     public static ObservableCollection<DialogueScene> LoadScenes(string dataDir, string textDir)

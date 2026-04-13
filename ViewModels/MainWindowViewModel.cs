@@ -530,7 +530,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var resolved = DialogueProjectService.ResolveProjectDirs(selectedPath);
         if (resolved == null)
         {
-            StatusText = "目录无效：需要存在 DataConfigs/Data/Dialogue 与 DataConfigs/Text/Dialogue（.git 与 DataConfigs 同级）。";
+            StatusText = "目录无效：请选择工程根目录，且其下直接包含 DataConfigs、GameResources，以及 DataConfigs/Data/Dialogue 与 DataConfigs/Text/Dialogue。";
             return;
         }
 
@@ -547,14 +547,14 @@ public partial class MainWindowViewModel : ViewModelBase
         _projectRoot = projectRoot;
         _openedDataDialogueDir = dataDir;
         _openedTextDialogueDir = textDir;
+        var rootResources = Path.Combine(projectRoot, "Resources");
+        var rootGameResources = Path.Combine(projectRoot, "GameResources");
         var assetsRoot = Path.Combine(projectRoot, "Assets");
-        if (!Directory.Exists(assetsRoot))
-        {
-            assetsRoot = projectRoot;
-        }
+        var assetsResources = Path.Combine(assetsRoot, "Resources");
+        var assetsGameResources = Path.Combine(assetsRoot, "GameResources");
 
-        _resourcesRoot = Path.Combine(assetsRoot, "Resources");
-        _gameResourcesRoot = Path.Combine(assetsRoot, "GameResources");
+        _resourcesRoot = Directory.Exists(rootResources) ? rootResources : assetsResources;
+        _gameResourcesRoot = Directory.Exists(rootGameResources) ? rootGameResources : assetsGameResources;
         LoadRoleEntries(projectRoot);
         RefreshRoleMapsAndOptions();
         RefreshAllScenePreviews();
@@ -2260,7 +2260,7 @@ public partial class MainWindowViewModel : ViewModelBase
         AddFromRoot(_gameResourcesRoot);
         if (!string.IsNullOrWhiteSpace(_projectRoot))
         {
-            AddFromRoot(Path.Combine(_projectRoot, "DataConfigs", "GameResources"));
+            AddFromRoot(Path.Combine(_projectRoot, "GameResources"));
         }
     }
 

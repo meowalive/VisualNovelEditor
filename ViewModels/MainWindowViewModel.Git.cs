@@ -42,6 +42,29 @@ public partial class MainWindowViewModel
             : string.Empty;
     }
 
+    private void RefreshPendingProjectImagePaths()
+    {
+        if (!GitPanelEnabled || string.IsNullOrEmpty(_projectRoot))
+        {
+            return;
+        }
+
+        var before = _pendingGitCommitPaths.Count;
+        foreach (var path in ProjectGitService.CollectChangedProjectImageFiles(_projectRoot, _projectRoot))
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                _pendingGitCommitPaths.Add(Path.GetFullPath(path));
+            }
+        }
+
+        if (_pendingGitCommitPaths.Count != before)
+        {
+            OnPropertyChanged(nameof(HasUnpushedCommits));
+            GitPushCommand.NotifyCanExecuteChanged();
+        }
+    }
+
     private void AfterProjectOpenedForGit()
     {
         if (string.IsNullOrEmpty(_projectRoot))
@@ -55,10 +78,16 @@ public partial class MainWindowViewModel
 
         GitPanelEnabled = ProjectGitService.IsGitRepository(_projectRoot);
         RefreshGitUserDisplayName();
+        RefreshPendingProjectImagePaths();
         RefreshGitAhead();
-        GitStatusHint = GitPanelEnabled
-            ? (GitAheadBy > 0 ? $"未推送提交：{GitAheadBy}" : "与远端同步。")
-            : string.Empty;
+        if (GitPanelEnabled)
+        {
+            UpdateGitStatusHintForPendingAndAhead();
+        }
+        else
+        {
+            GitStatusHint = string.Empty;
+        }
         _ = RunGitPullOnOpenAsync();
     }
 
@@ -230,10 +259,7 @@ public partial class MainWindowViewModel
             }
 
             var full = Path.GetFullPath(p);
-            if (File.Exists(full))
-            {
-                _pendingGitCommitPaths.Add(full);
-            }
+            _pendingGitCommitPaths.Add(full);
         }
 
         UpdateGitStatusHintForPendingAndAhead();
@@ -244,6 +270,7 @@ public partial class MainWindowViewModel
     /// <returns>是否成功提交或无需提交。</returns>
     private bool TryFlushPendingGitCommit()
     {
+        RefreshPendingProjectImagePaths();
         if (!GitPanelEnabled || string.IsNullOrEmpty(_projectRoot) || _pendingGitCommitPaths.Count == 0)
         {
             return true;
@@ -280,13 +307,15 @@ public partial class MainWindowViewModel
             return;
         }
 
+        RefreshPendingProjectImagePaths();
+
         if (GitAheadBy > 0 && _pendingGitCommitPaths.Count > 0)
         {
-            GitStatusHint = $"未推送提交：{GitAheadBy}；另有已保存将合并提交";
+            GitStatusHint = $"未推送提交：{GitAheadBy}；另有已保存编辑/工程内图片将合并提交";
         }
         else if (_pendingGitCommitPaths.Count > 0)
         {
-            GitStatusHint = "已保存的编辑将在上传时合并为一次提交。";
+            GitStatusHint = "已保存的编辑与工程内图片改动将在上传时合并为一次提交。";
         }
         else
         {

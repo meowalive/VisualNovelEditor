@@ -98,7 +98,7 @@ public partial class MainWindow : Window
 
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "选择工程目录（含 DataConfigs，或与 .git 同级）",
+            Title = "选择工程根目录（目录下需直接包含 DataConfigs 和 GameResources）",
             AllowMultiple = false
         });
 
