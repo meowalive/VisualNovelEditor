@@ -43,6 +43,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly object _previewPortraitStateSync = new();
     private CancellationTokenSource? _previewVisualScriptCts;
     private CancellationTokenSource? _previewTypewriterCts;
+    private Process? _runtimePreviewProcess;
+    private string _runtimePreviewWorkspaceRoot = string.Empty;
 
     public ObservableCollection<DialogueScene> Scenes { get; } = new();
     public ObservableCollection<RoleEntry> RoleEntries { get; } = new();
@@ -114,6 +116,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private double globalFontSize = 14;
     [ObservableProperty] private Bitmap? editorBackgroundImage;
     [ObservableProperty] private string editorBackgroundPath = string.Empty;
+    [ObservableProperty] private string previewPlayerPath = string.Empty;
     [ObservableProperty] private Color editorBackgroundTint = Colors.Black;
     [ObservableProperty] private string editorBackgroundTintColorText = "#000000";
     [ObservableProperty] private double editorBackgroundTintOpacity = 0.25;
@@ -438,6 +441,16 @@ public partial class MainWindowViewModel : ViewModelBase
         SaveEditorSettings();
     }
 
+    partial void OnPreviewPlayerPathChanged(string value)
+    {
+        if (_loadingSettings)
+        {
+            return;
+        }
+
+        SaveEditorSettings();
+    }
+
     [RelayCommand(CanExecute = nameof(CanAddLine))]
     private void AddLine()
     {
@@ -546,7 +559,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var resolved = DialogueProjectService.ResolveProjectDirs(selectedPath);
         if (resolved == null)
         {
-            StatusText = "目录无效：请选择工程根目录，且其下直接包含 DataConfigs、GameResources，以及 DataConfigs/Data/Dialogue 与 DataConfigs/Text/Dialogue。";
+            StatusText = "目录无效：请选择工程根目录，且其下需包含 DataConfigs/GameResources 或 Assets/DataConfigs/Assets/GameResources。";
             return;
         }
 
@@ -784,6 +797,291 @@ public partial class MainWindowViewModel : ViewModelBase
             _roleNameMap,
             _roleDefaultYMap,
             _roleDefaultScaleMap);
+    }
+
+    public async Task LaunchRuntimePreviewAsync()
+    {
+        if (SelectedScene == null || SelectedScene.Lines.Count == 0)
+        {
+            StatusText = "当前场景为空，无法启动运行时预览。";
+            return;
+        }
+
+        var validationErrors = ValidateRuntimePreviewScripts(SelectedScene);
+        if (validationErrors.Count > 0)
+        {
+            StatusText = "运行时预览启动失败：" + validationErrors[0];
+            return;
+        }
+
+        var playerPath = ResolveRuntimePreviewPlayerPath();
+        if (string.IsNullOrWhiteSpace(playerPath))
+        {
+            StatusText = "未找到运行时预览播放器，请先在设置中配置 PreviewPlayerPath。";
+            return;
+        }
+
+        var imagesRoot = ResolveRuntimePreviewImagesRoot();
+        if (string.IsNullOrWhiteSpace(imagesRoot) || !Directory.Exists(imagesRoot))
+        {
+            StatusText = "未找到对话图片目录，无法启动运行时预览。";
+            return;
+        }
+
+        var entryId = BuildRuntimePreviewEntryId();
+        if (string.IsNullOrWhiteSpace(entryId))
+        {
+            StatusText = "未找到有效的对话入口行。";
+            return;
+        }
+
+        var previewRoot = Path.Combine(Path.GetTempPath(), "VNEditorRuntimePreview", Guid.NewGuid().ToString("N"));
+        try
+        {
+            await ExportRuntimePreviewWorkspaceAsync(previewRoot);
+            CleanupPreviousRuntimePreview();
+
+            var process = StartRuntimePreviewProcess(playerPath, previewRoot, imagesRoot, entryId);
+            _runtimePreviewProcess = process;
+            _runtimePreviewWorkspaceRoot = previewRoot;
+            _runtimePreviewProcess.EnableRaisingEvents = true;
+            _runtimePreviewProcess.Exited += (_, _) => CleanupRuntimePreviewWorkspace(previewRoot);
+            StatusText = $"已启动运行时预览：{entryId}";
+        }
+        catch (Exception ex)
+        {
+            CleanupRuntimePreviewWorkspace(previewRoot);
+            StatusText = $"启动运行时预览失败：{ex.Message}";
+        }
+    }
+
+    private async Task ExportRuntimePreviewWorkspaceAsync(string previewRoot)
+    {
+        var dataDir = DialogueProjectService.GetDialogueDataDir(previewRoot);
+        var textDir = DialogueProjectService.GetDialogueTextDir(previewRoot);
+        var validRoleIds = BuildValidRoleIdSet();
+        var sceneSnapshot = Scenes.ToList();
+        var roleSnapshot = RoleEntries.ToList();
+
+        await Task.Run(() =>
+        {
+            Directory.CreateDirectory(dataDir);
+            Directory.CreateDirectory(textDir);
+
+            foreach (var scene in sceneSnapshot)
+            {
+                DialogueProjectService.ExportScene(scene, dataDir, textDir, validRoleIds);
+            }
+
+            DialogueProjectService.SaveRoleEntries(previewRoot, roleSnapshot);
+        });
+    }
+
+    private void CleanupPreviousRuntimePreview()
+    {
+        try
+        {
+            if (_runtimePreviewProcess != null && !_runtimePreviewProcess.HasExited)
+            {
+                _runtimePreviewProcess.Kill(true);
+                _runtimePreviewProcess.WaitForExit(2000);
+            }
+        }
+        catch
+        {
+            // Ignore preview shutdown failures and continue replacing the process.
+        }
+        finally
+        {
+            _runtimePreviewProcess?.Dispose();
+            _runtimePreviewProcess = null;
+        }
+
+        CleanupRuntimePreviewWorkspace(_runtimePreviewWorkspaceRoot);
+        _runtimePreviewWorkspaceRoot = string.Empty;
+    }
+
+    private static void CleanupRuntimePreviewWorkspace(string workspaceRoot)
+    {
+        if (string.IsNullOrWhiteSpace(workspaceRoot) || !Directory.Exists(workspaceRoot))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(workspaceRoot, true);
+        }
+        catch
+        {
+            // Ignore best-effort temp cleanup failures.
+        }
+    }
+
+    private string BuildRuntimePreviewEntryId()
+    {
+        if (SelectedScene == null)
+        {
+            return string.Empty;
+        }
+
+        var targetLine = SelectedLine ?? SelectedScene.Lines.FirstOrDefault();
+        return targetLine == null ? string.Empty : $"{SelectedScene.Name}_{targetLine.CsvId}";
+    }
+
+    private string ResolveRuntimePreviewImagesRoot()
+    {
+        var candidates = new[]
+        {
+            string.IsNullOrWhiteSpace(_gameResourcesRoot) ? string.Empty : Path.Combine(_gameResourcesRoot, "Images"),
+            string.IsNullOrWhiteSpace(_projectRoot) ? string.Empty : Path.Combine(_projectRoot, "GameResources", "Images"),
+            string.IsNullOrWhiteSpace(_projectRoot) ? string.Empty : Path.Combine(_projectRoot, "Assets", "GameResources", "Images")
+        };
+
+        return candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path)) ?? string.Empty;
+    }
+
+    private string ResolveRuntimePreviewPlayerPath()
+    {
+        if (!string.IsNullOrWhiteSpace(PreviewPlayerPath))
+        {
+            var configured = Path.GetFullPath(PreviewPlayerPath);
+            if (File.Exists(configured) || Directory.Exists(configured))
+            {
+                return configured;
+            }
+        }
+
+        foreach (var candidate in EnumerateRuntimePreviewPlayerCandidates())
+        {
+            if (!string.IsNullOrWhiteSpace(candidate) && (File.Exists(candidate) || Directory.Exists(candidate)))
+            {
+                return candidate;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private IEnumerable<string> EnumerateRuntimePreviewPlayerCandidates()
+    {
+        var baseDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(_projectRoot))
+        {
+            baseDirs.Add(_projectRoot);
+            baseDirs.Add(Path.Combine(_projectRoot, "Builds"));
+        }
+
+        baseDirs.Add(AppContext.BaseDirectory);
+        var parentBaseDir = Directory.GetParent(AppContext.BaseDirectory)?.FullName;
+        if (!string.IsNullOrWhiteSpace(parentBaseDir))
+        {
+            baseDirs.Add(parentBaseDir);
+        }
+
+        foreach (var baseDir in baseDirs)
+        {
+            if (string.IsNullOrWhiteSpace(baseDir))
+            {
+                continue;
+            }
+
+            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer.app");
+            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer.exe");
+            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer");
+            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer", "VisualNovelEditorPlayer");
+        }
+    }
+
+    private static Process StartRuntimePreviewProcess(string playerPath, string previewRoot, string imagesRoot, string entryId)
+    {
+        var executablePath = ResolveRuntimePreviewExecutable(playerPath);
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executablePath,
+            UseShellExecute = false,
+            WorkingDirectory = Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory
+        };
+        startInfo.ArgumentList.Add($"--preview-root={previewRoot}");
+        startInfo.ArgumentList.Add($"--images-root={imagesRoot}");
+        startInfo.ArgumentList.Add($"--entry-id={entryId}");
+        startInfo.ArgumentList.Add("--language=zh-CN");
+
+        return Process.Start(startInfo) ?? throw new InvalidOperationException("运行时预览播放器启动失败。");
+    }
+
+    private static List<string> ValidateRuntimePreviewScripts(DialogueScene scene)
+    {
+        var errors = new List<string>();
+        if (scene == null)
+        {
+            return errors;
+        }
+
+        foreach (var line in scene.Lines)
+        {
+            CollectScriptErrors(errors, scene.Name, line.CsvId, "BaseScript", line.BaseScript);
+            CollectScriptErrors(errors, scene.Name, line.CsvId, "EndScript", line.EndScript);
+            CollectScriptErrors(errors, scene.Name, line.CsvId, "ChoiceScript1", line.ChoiceScript1);
+            CollectScriptErrors(errors, scene.Name, line.CsvId, "ChoiceScript2", line.ChoiceScript2);
+            CollectScriptErrors(errors, scene.Name, line.CsvId, "ChoiceScript3", line.ChoiceScript3);
+            CollectScriptErrors(errors, scene.Name, line.CsvId, "ChoiceScript4", line.ChoiceScript4);
+        }
+
+        return errors;
+    }
+
+    private static void CollectScriptErrors(List<string> errors, string sceneName, string lineId, string scriptName, string? script)
+    {
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return;
+        }
+
+        foreach (var error in ScriptSyntaxValidator.Validate(script))
+        {
+            errors.Add($"{sceneName}_{lineId} {scriptName}: {error}");
+        }
+    }
+
+    private static string ResolveRuntimePreviewExecutable(string playerPath)
+    {
+        var fullPath = Path.GetFullPath(playerPath);
+        if (File.Exists(fullPath))
+        {
+            return fullPath;
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            throw new FileNotFoundException("未找到运行时预览播放器。", fullPath);
+        }
+
+        if (fullPath.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+        {
+            var appName = Path.GetFileNameWithoutExtension(fullPath);
+            var defaultBinaryPath = Path.Combine(fullPath, "Contents", "MacOS", appName);
+            if (File.Exists(defaultBinaryPath))
+            {
+                return defaultBinaryPath;
+            }
+
+            var macOsDir = Path.Combine(fullPath, "Contents", "MacOS");
+            var bundleBinary = Directory.Exists(macOsDir) ? Directory.GetFiles(macOsDir).FirstOrDefault() : null;
+            if (!string.IsNullOrWhiteSpace(bundleBinary))
+            {
+                return bundleBinary;
+            }
+        }
+
+        var folderName = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var nestedBinary = Path.Combine(fullPath, folderName);
+        if (File.Exists(nestedBinary))
+        {
+            return nestedBinary;
+        }
+
+        throw new FileNotFoundException("无法定位运行时预览播放器可执行文件。", fullPath);
     }
 
     private void LoadRoleEntries(string projectRoot)
@@ -2493,6 +2791,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 try { SetEditorBackgroundByPath(settings.EditorBackgroundPath); } catch { /* 背景图加载失败时忽略 */ }
             }
+            PreviewPlayerPath = settings.PreviewPlayerPath ?? string.Empty;
             WindowOpacity = Math.Clamp(settings.WindowOpacity, 0.2, 1.0);
             WindowBlurLevel = Math.Clamp(settings.WindowBlurLevel, 0, 2);
             if (!string.IsNullOrWhiteSpace(settings.LastOpenedProjectPath))
@@ -2526,6 +2825,7 @@ public partial class MainWindowViewModel : ViewModelBase
             EditorBackgroundTintColor = ColorToHex(EditorBackgroundTint),
             EditorBackgroundTintOpacity = EditorBackgroundTintOpacity,
             ThemeMode = ThemeMode,
+            PreviewPlayerPath = PreviewPlayerPath,
             WindowOpacity = WindowOpacity,
             WindowBlurLevel = WindowBlurLevel
         });

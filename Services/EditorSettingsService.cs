@@ -12,6 +12,7 @@ public class EditorSettings
     public string EditorBackgroundTintColor { get; set; } = "#000000";
     public double EditorBackgroundTintOpacity { get; set; } = 0.25;
     public string ThemeMode { get; set; } = "黑夜";
+    public string PreviewPlayerPath { get; set; } = string.Empty;
     /// <summary>窗口整体透明度，0.2～1</summary>
     public double WindowOpacity { get; set; } = 1.0;
     /// <summary>窗口模糊/毛玻璃：0=无，1=模糊，2=亚克力</summary>

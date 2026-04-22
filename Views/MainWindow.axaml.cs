@@ -149,17 +149,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var previewVm = vm.CreateScenePreviewViewModel();
-        if (previewVm == null)
-        {
-            return;
-        }
-
-        var win = new ScenePreviewWindow
-        {
-            DataContext = previewVm
-        };
-        await win.ShowDialog(this);
+        await vm.LaunchRuntimePreviewAsync();
     }
 
     private void OnSceneCardPressed(object? sender, PointerPressedEventArgs e)

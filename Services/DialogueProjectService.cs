@@ -10,22 +10,20 @@ namespace VNEditor.Services;
 
 public static class DialogueProjectService
 {
-    private const string LegacyBgMetaPrefix = "//VNEditor:BG=";
-    private static readonly string[] BackgroundColumnNames = ["Backround", "Background", "BackgroundPath"];
 
     /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue。</summary>
     public static string GetDialogueDataDir(string projectRoot) =>
-        Path.Combine(projectRoot, "DataConfigs", "Data", "Dialogue");
+        Path.Combine(GetProjectDataConfigsRoot(projectRoot), "Data", "Dialogue");
 
     /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Text/Dialogue。</summary>
     public static string GetDialogueTextDir(string projectRoot) =>
-        Path.Combine(projectRoot, "DataConfigs", "Text", "Dialogue");
+        Path.Combine(GetProjectDataConfigsRoot(projectRoot), "Text", "Dialogue");
 
     public static string GetRoleDataDataDir(string projectRoot) =>
-        Path.Combine(projectRoot, "DataConfigs", "Data", "RoleData");
+        Path.Combine(GetProjectDataConfigsRoot(projectRoot), "Data", "RoleData");
 
     public static string GetRoleDataTextDir(string projectRoot) =>
-        Path.Combine(projectRoot, "DataConfigs", "Text", "RoleData");
+        Path.Combine(GetProjectDataConfigsRoot(projectRoot), "Text", "RoleData");
 
     /// <summary>
     /// 解析工程：用户选中的目录本身必须就是工程根，且其下直接包含
@@ -39,8 +37,8 @@ public static class DialogueProjectService
         }
 
         var projectRoot = Path.GetFullPath(selectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var childDataConfigs = Path.Combine(projectRoot, "DataConfigs");
-        var gameResourcesDir = Path.Combine(projectRoot, "GameResources");
+        var childDataConfigs = GetProjectDataConfigsRoot(projectRoot);
+        var gameResourcesDir = GetProjectGameResourcesRoot(projectRoot);
         if (!Directory.Exists(childDataConfigs) || !Directory.Exists(gameResourcesDir))
         {
             return null;
@@ -484,9 +482,8 @@ public static class DialogueProjectService
                     line.IdPart = key;
 
                     var rawBaseScript = GetCell(row, 1);
-                    var (pureBaseScript, bg) = ExtractMetadataFromScript(rawBaseScript);
-                    line.BaseScript = pureBaseScript;
-                    line.BackgroundPath = GetBackgroundValue(row, header, bg);
+                    line.BaseScript = NormalizePlainScriptForExport(rawBaseScript);
+                    line.BackgroundPath = GetCellByColumn(row, header, "Background").Trim();
                     line.RoleImage1 = GetCellByColumn(row, header, "RoleImage1");
                     line.RoleImage2 = GetCellByColumn(row, header, "RoleImage2");
                     line.EndScript = GetCellByColumn(row, header, "EndScript");
@@ -604,35 +601,9 @@ public static class DialogueProjectService
         return temp;
     }
 
-    private static (string pureScript, string bg) ExtractMetadataFromScript(string script)
-    {
-        if (string.IsNullOrWhiteSpace(script))
-        {
-            return (string.Empty, string.Empty);
-        }
-
-        var bg = string.Empty;
-        var lines = script.Replace("\r\n", "\n").Split('\n');
-        var pure = new List<string>(lines.Length);
-
-        foreach (var line in lines)
-        {
-            var trimmed = line.Trim();
-            if (trimmed.StartsWith(LegacyBgMetaPrefix, StringComparison.Ordinal))
-            {
-                bg = trimmed[LegacyBgMetaPrefix.Length..].Trim();
-                continue;
-            }
-
-            pure.Add(line);
-        }
-
-        return (string.Join(Environment.NewLine, pure).Trim(), bg);
-    }
-
     private static string NormalizeScriptForExport(string baseScript)
     {
-        return LuaScriptRuntimeService.NormalizeAliases(ExtractMetadataFromScript(baseScript).pureScript);
+        return NormalizePlainScriptForExport(baseScript);
     }
 
     private static string NormalizePlainScriptForExport(string? script)
@@ -700,20 +671,6 @@ public static class DialogueProjectService
             cols.Add($"ChoiceScript{i}");
         }
         return cols.ToArray();
-    }
-
-    private static string GetBackgroundValue(string[] row, string[] header, string fallbackFromLegacyComment)
-    {
-        foreach (var columnName in BackgroundColumnNames)
-        {
-            var value = GetCellByColumn(row, header, columnName);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value.Trim();
-            }
-        }
-
-        return fallbackFromLegacyComment;
     }
 
     private static string[] BuildTextHeader(int maxChoice)
@@ -853,6 +810,30 @@ public static class DialogueProjectService
         }
 
         return trimmed;
+    }
+
+    private static string GetProjectDataConfigsRoot(string projectRoot)
+    {
+        var rootDataConfigs = Path.Combine(projectRoot, "DataConfigs");
+        if (Directory.Exists(rootDataConfigs))
+        {
+            return rootDataConfigs;
+        }
+
+        var assetsDataConfigs = Path.Combine(projectRoot, "Assets", "DataConfigs");
+        return Directory.Exists(assetsDataConfigs) ? assetsDataConfigs : rootDataConfigs;
+    }
+
+    private static string GetProjectGameResourcesRoot(string projectRoot)
+    {
+        var rootGameResources = Path.Combine(projectRoot, "GameResources");
+        if (Directory.Exists(rootGameResources))
+        {
+            return rootGameResources;
+        }
+
+        var assetsGameResources = Path.Combine(projectRoot, "Assets", "GameResources");
+        return Directory.Exists(assetsGameResources) ? assetsGameResources : rootGameResources;
     }
 
     private static bool IsRoleValid(string roleId, ISet<string> validRoleIds)

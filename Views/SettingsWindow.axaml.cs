@@ -91,6 +91,36 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private async void OnPickPreviewPlayerClicked(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "选择运行时预览播放器",
+            AllowMultiple = false
+        });
+
+        var path = files.FirstOrDefault()?.TryGetLocalPath();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "选择运行时预览播放器目录（如 .app）",
+                AllowMultiple = false
+            });
+            path = folders.FirstOrDefault()?.TryGetLocalPath();
+        }
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            vm.PreviewPlayerPath = path;
+        }
+    }
+
     private async void OnOpenTintPickerClicked(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
