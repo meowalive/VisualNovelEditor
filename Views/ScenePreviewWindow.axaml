@@ -46,8 +46,8 @@
                 </Grid>
             </Grid>
 
-            <Grid ColumnDefinitions="*,*" VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseDualPortrait}">
-                <Grid Grid.Column="0" IsVisible="{Binding PreviewPortrait1Visible}" Opacity="{Binding PreviewPortrait1Opacity}">
+            <Grid ColumnDefinitions="*,*,*,*" VerticalAlignment="Stretch" IsVisible="{Binding PreviewUseDualPortrait}">
+                <Grid Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding PreviewPortrait1Visible}" Opacity="{Binding PreviewPortrait1Opacity}">
                     <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
                         <Grid.RenderTransform>
                             <TransformGroup>
@@ -63,7 +63,7 @@
                         </Border>
                     </Grid>
                 </Grid>
-                <Grid Grid.Column="1" IsVisible="{Binding PreviewPortrait2Visible}" Opacity="{Binding PreviewPortrait2Opacity}">
+                <Grid Grid.Column="2" Grid.ColumnSpan="2" IsVisible="{Binding PreviewPortrait2Visible}" Opacity="{Binding PreviewPortrait2Opacity}">
                     <Grid HorizontalAlignment="Center" VerticalAlignment="Stretch" RenderTransformOrigin="0.5,1">
                         <Grid.RenderTransform>
                             <TransformGroup>

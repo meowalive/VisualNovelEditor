@@ -817,7 +817,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var playerPath = ResolveRuntimePreviewPlayerPath();
         if (string.IsNullOrWhiteSpace(playerPath))
         {
-            StatusText = "未找到运行时预览播放器，请先在设置中配置 PreviewPlayerPath。";
+            StatusText = "未找到游戏可执行文件，请先在设置中选择。";
             return;
         }
 
@@ -943,54 +943,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string ResolveRuntimePreviewPlayerPath()
     {
-        if (!string.IsNullOrWhiteSpace(PreviewPlayerPath))
+        if (string.IsNullOrWhiteSpace(PreviewPlayerPath))
         {
-            var configured = Path.GetFullPath(PreviewPlayerPath);
-            if (File.Exists(configured) || Directory.Exists(configured))
-            {
-                return configured;
-            }
+            return string.Empty;
         }
 
-        foreach (var candidate in EnumerateRuntimePreviewPlayerCandidates())
-        {
-            if (!string.IsNullOrWhiteSpace(candidate) && (File.Exists(candidate) || Directory.Exists(candidate)))
-            {
-                return candidate;
-            }
-        }
-
-        return string.Empty;
-    }
-
-    private IEnumerable<string> EnumerateRuntimePreviewPlayerCandidates()
-    {
-        var baseDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (!string.IsNullOrWhiteSpace(_projectRoot))
-        {
-            baseDirs.Add(_projectRoot);
-            baseDirs.Add(Path.Combine(_projectRoot, "Builds"));
-        }
-
-        baseDirs.Add(AppContext.BaseDirectory);
-        var parentBaseDir = Directory.GetParent(AppContext.BaseDirectory)?.FullName;
-        if (!string.IsNullOrWhiteSpace(parentBaseDir))
-        {
-            baseDirs.Add(parentBaseDir);
-        }
-
-        foreach (var baseDir in baseDirs)
-        {
-            if (string.IsNullOrWhiteSpace(baseDir))
-            {
-                continue;
-            }
-
-            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer.app");
-            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer.exe");
-            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer");
-            yield return Path.Combine(baseDir, "VisualNovelEditorPlayer", "VisualNovelEditorPlayer");
-        }
+        var configured = Path.GetFullPath(PreviewPlayerPath);
+        return File.Exists(configured) ? configured : string.Empty;
     }
 
     private static Process StartRuntimePreviewProcess(string playerPath, string previewRoot, string imagesRoot, string entryId)
@@ -1052,36 +1011,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return fullPath;
         }
 
-        if (!Directory.Exists(fullPath))
-        {
-            throw new FileNotFoundException("未找到运行时预览播放器。", fullPath);
-        }
-
-        if (fullPath.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
-        {
-            var appName = Path.GetFileNameWithoutExtension(fullPath);
-            var defaultBinaryPath = Path.Combine(fullPath, "Contents", "MacOS", appName);
-            if (File.Exists(defaultBinaryPath))
-            {
-                return defaultBinaryPath;
-            }
-
-            var macOsDir = Path.Combine(fullPath, "Contents", "MacOS");
-            var bundleBinary = Directory.Exists(macOsDir) ? Directory.GetFiles(macOsDir).FirstOrDefault() : null;
-            if (!string.IsNullOrWhiteSpace(bundleBinary))
-            {
-                return bundleBinary;
-            }
-        }
-
-        var folderName = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var nestedBinary = Path.Combine(fullPath, folderName);
-        if (File.Exists(nestedBinary))
-        {
-            return nestedBinary;
-        }
-
-        throw new FileNotFoundException("无法定位运行时预览播放器可执行文件。", fullPath);
+        throw new FileNotFoundException($"Game executable not found: {fullPath}", fullPath);
     }
 
     private void LoadRoleEntries(string projectRoot)

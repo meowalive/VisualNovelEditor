@@ -100,21 +100,18 @@ public partial class SettingsWindow : Window
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "选择运行时预览播放器",
-            AllowMultiple = false
+            Title = "选择游戏可执行文件",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("可执行文件")
+                {
+                    Patterns = ["*.exe"]
+                }
+            ]
         });
 
         var path = files.FirstOrDefault()?.TryGetLocalPath();
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-            {
-                Title = "选择运行时预览播放器目录（如 .app）",
-                AllowMultiple = false
-            });
-            path = folders.FirstOrDefault()?.TryGetLocalPath();
-        }
-
         if (!string.IsNullOrWhiteSpace(path))
         {
             vm.PreviewPlayerPath = path;

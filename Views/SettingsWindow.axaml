@@ -36,8 +36,8 @@
             <Button Grid.Row="0" Grid.Column="3" Content="应用" Margin="8,0,0,0" Command="{Binding ApplyEditorBackgroundCommand}"/>
             <Button Grid.Row="0" Grid.Column="4" Content="清除" Margin="8,0,0,0" Command="{Binding ClearEditorBackgroundCommand}"/>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="预览播放器" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PreviewPlayerPath, Mode=TwoWay}" Watermark="输入运行时预览播放器路径"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="游戏可执行文件" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PreviewPlayerPath, Mode=TwoWay}" Watermark="选择游戏 .exe 文件"/>
             <Button Grid.Row="1" Grid.Column="2" Content="选择" Margin="8,0,0,0" Click="OnPickPreviewPlayerClicked"/>
 
             <TextBlock Grid.Row="2" Grid.Column="0" Text="全局字号" VerticalAlignment="Center" Foreground="{Binding ThemeTextPrimary}"/>
