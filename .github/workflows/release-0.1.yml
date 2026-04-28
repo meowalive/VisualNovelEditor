@@ -34,11 +34,11 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        shell: pwsh
+        shell: bash
         run: dotnet restore $env:PROJECT_PATH
 
       - name: Publish Release Build
-        shell: pwsh
+        shell: bash
         run: dotnet publish $env:PROJECT_PATH -c Release -r win-x64 --self-contained true -o $env:PUBLISH_DIR
 
       - name: Upload Workflow Artifact
@@ -49,13 +49,13 @@ jobs:
           if-no-files-found: error
 
       - name: Ensure Release Exists
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY
 
       - name: Upload Asset To Release
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
