@@ -46,12 +46,6 @@ jobs:
             --self-contained true \
             -o "$PUBLISH_DIR"
 
-      - name: Ensure Release Exists
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
-
       - name: Upload Asset To Release
         shell: bash
         env:
