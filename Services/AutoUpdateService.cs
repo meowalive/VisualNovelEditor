@@ -42,6 +42,7 @@ public static class AutoUpdateService
 {
     private const string ReleaseTag = "Release";
     private const string ReleaseExeName = "VNEditor.exe";
+    private const string ReleaseSha256Name = ReleaseExeName + ".sha256";
     private const string DownloadedExeTempName = "VNEditor.update.download";
 
     public static string GetReleasePageUrl()
@@ -85,15 +86,32 @@ public static class AutoUpdateService
             var releaseAsset = await GetTaggedReleaseExeAssetAsync(http, source);
             if (releaseAsset == null || string.IsNullOrWhiteSpace(releaseAsset.BrowserDownloadUrl))
             {
-                releaseAsset = new ReleaseAssetInfo
+                return new UpdateCheckResult
                 {
-                    Name = ReleaseExeName,
-                    BrowserDownloadUrl = source.DownloadUrl
+                    Status = UpdateCheckStatus.NoReleaseAsset,
+                    ReleasePageUrl = source.ReleasePageUrl
                 };
             }
 
-            if (!string.IsNullOrWhiteSpace(releaseAsset.Sha256Digest)
-                && string.Equals(localSha, releaseAsset.Sha256Digest, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(releaseAsset.Sha256Digest))
+            {
+                releaseAsset.Sha256Digest = await GetReleaseAssetSha256Async(http, releaseAsset);
+                if (string.IsNullOrWhiteSpace(releaseAsset.Sha256Digest))
+                {
+                    return new UpdateCheckResult
+                    {
+                        Status = UpdateCheckStatus.NoReleaseAsset,
+                        CurrentExePath = currentExe,
+                        DownloadUrl = releaseAsset.BrowserDownloadUrl,
+                        DownloadedTempPath = tempExe,
+                        ReleasePageUrl = source.ReleasePageUrl,
+                        LocalSha256 = localSha,
+                        ErrorMessage = "远端发布资产未提供 SHA256，且未找到 VNEditor.exe.sha256。"
+                    };
+                }
+            }
+
+            if (string.Equals(localSha, releaseAsset.Sha256Digest, StringComparison.OrdinalIgnoreCase))
             {
                 return new UpdateCheckResult
                 {
@@ -104,36 +122,6 @@ public static class AutoUpdateService
                     ReleasePageUrl = source.ReleasePageUrl,
                     LocalSha256 = localSha,
                     RemoteSha256 = releaseAsset.Sha256Digest
-                };
-            }
-
-            if (string.IsNullOrWhiteSpace(releaseAsset.Sha256Digest))
-            {
-                var remoteSha = await DownloadAndHashRemoteExeAsync(http, releaseAsset.BrowserDownloadUrl, tempExe);
-                if (string.Equals(localSha, remoteSha, StringComparison.OrdinalIgnoreCase))
-                {
-                    TryDeleteFile(tempExe);
-                    return new UpdateCheckResult
-                    {
-                        Status = UpdateCheckStatus.UpToDate,
-                        CurrentExePath = currentExe,
-                        DownloadUrl = releaseAsset.BrowserDownloadUrl,
-                        DownloadedTempPath = tempExe,
-                        ReleasePageUrl = source.ReleasePageUrl,
-                        LocalSha256 = localSha,
-                        RemoteSha256 = remoteSha
-                    };
-                }
-
-                return new UpdateCheckResult
-                {
-                    Status = UpdateCheckStatus.UpdateAvailable,
-                    CurrentExePath = currentExe,
-                    DownloadUrl = releaseAsset.BrowserDownloadUrl,
-                    DownloadedTempPath = tempExe,
-                    ReleasePageUrl = source.ReleasePageUrl,
-                    LocalSha256 = localSha,
-                    RemoteSha256 = remoteSha
                 };
             }
 
@@ -479,6 +467,8 @@ public static class AutoUpdateService
             return null;
         }
 
+        ReleaseAssetInfo? exeAsset = null;
+        string? sha256DownloadUrl = null;
         foreach (var asset in assets.EnumerateArray())
         {
             if (!asset.TryGetProperty("name", out var nameEl))
@@ -487,13 +477,6 @@ public static class AutoUpdateService
             }
 
             var name = nameEl.GetString() ?? string.Empty;
-            var isTargetExe = name.Equals(ReleaseExeName, StringComparison.OrdinalIgnoreCase)
-                              || name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-            if (!isTargetExe)
-            {
-                continue;
-            }
-
             if (asset.TryGetProperty("browser_download_url", out var urlEl))
             {
                 var downloadUrl = urlEl.GetString();
@@ -502,28 +485,51 @@ public static class AutoUpdateService
                     continue;
                 }
 
-                var digest = string.Empty;
-                if (asset.TryGetProperty("digest", out var digestEl))
+                if (name.Equals(ReleaseSha256Name, StringComparison.OrdinalIgnoreCase))
                 {
-                    digest = NormalizeDigest(digestEl.GetString());
+                    sha256DownloadUrl = downloadUrl;
+                    continue;
                 }
 
-                return new ReleaseAssetInfo
+                var isTargetExe = name.Equals(ReleaseExeName, StringComparison.OrdinalIgnoreCase)
+                                  || name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+                if (!isTargetExe)
+                {
+                    continue;
+                }
+
+                exeAsset ??= new ReleaseAssetInfo
                 {
                     Name = name,
                     BrowserDownloadUrl = downloadUrl,
-                    Sha256Digest = digest
+                    Sha256Digest = ReadSha256Digest(asset)
                 };
             }
         }
 
-        return null;
+        if (exeAsset != null)
+        {
+            exeAsset.Sha256DownloadUrl = sha256DownloadUrl;
+        }
+
+        return exeAsset;
     }
 
-    private static async Task<string> DownloadAndHashRemoteExeAsync(HttpClient http, string downloadUrl, string tempExe)
+    private static async Task<string> GetReleaseAssetSha256Async(HttpClient http, ReleaseAssetInfo releaseAsset)
     {
-        await DownloadFileAsync(http, downloadUrl, tempExe);
-        return ComputeSha256(tempExe);
+        if (string.IsNullOrWhiteSpace(releaseAsset.Sha256DownloadUrl))
+        {
+            return string.Empty;
+        }
+
+        using var response = await http.GetAsync(releaseAsset.Sha256DownloadUrl);
+        if (!response.IsSuccessStatusCode)
+        {
+            return string.Empty;
+        }
+
+        var text = await response.Content.ReadAsStringAsync();
+        return ParseSha256Text(text);
     }
 
     private static bool CanReuseDownloadedTemp(UpdateCheckResult result)
@@ -593,6 +599,23 @@ public static class AutoUpdateService
         return Convert.ToHexString(hash);
     }
 
+    private static string ReadSha256Digest(JsonElement asset)
+    {
+        foreach (var propertyName in new[] { "digest", "sha256", "sha256_digest", "sha256sum" })
+        {
+            if (asset.TryGetProperty(propertyName, out var digestEl))
+            {
+                var digest = NormalizeDigest(digestEl.GetString());
+                if (!string.IsNullOrWhiteSpace(digest))
+                {
+                    return digest;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
     private static string NormalizeDigest(string? digest)
     {
         if (string.IsNullOrWhiteSpace(digest))
@@ -608,6 +631,17 @@ public static class AutoUpdateService
         }
 
         return v.ToUpperInvariant();
+    }
+
+    private static string ParseSha256Text(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var firstToken = text.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return NormalizeDigest(firstToken);
     }
 
     private static bool IsGitHubHost(string host)
@@ -649,7 +683,8 @@ public static class AutoUpdateService
     {
         public string Name { get; init; } = string.Empty;
         public string BrowserDownloadUrl { get; init; } = string.Empty;
-        public string Sha256Digest { get; init; } = string.Empty;
+        public string Sha256Digest { get; set; } = string.Empty;
+        public string? Sha256DownloadUrl { get; set; }
     }
 
     private sealed class ReleaseSourceInfo

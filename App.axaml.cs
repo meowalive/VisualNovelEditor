@@ -152,7 +152,7 @@ public partial class App : Application
 
         if (result.Status == UpdateCheckStatus.NoReleaseAsset)
         {
-            var noAsset = new UpdateResultWindow("检测完成：未找到可下载的 VNEditor.exe 资产。");
+            var noAsset = new UpdateResultWindow($"检测完成：{result.ErrorMessage ?? "未找到可下载的 VNEditor.exe 资产。"}");
             noAsset.RequestedThemeVariant = mainWindow.ActualThemeVariant;
             await noAsset.ShowDialog(mainWindow);
             return;

@@ -4,12 +4,16 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.IO;
+using System.Text.RegularExpressions;
 using VNEditor.Models;
 
 namespace VNEditor.Services;
 
 public static class DialogueProjectService
 {
+    private static readonly Regex LegacyBackgroundDirectiveRegex = new(
+        @"^\s*(?://|--)\s*VNEditor\s*:\s*BG\s*=\s*(?<path>.*?)\s*$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Multiline);
 
     /// <summary>对话 CSV：&lt;工程根&gt;/DataConfigs/Data/Dialogue。</summary>
     public static string GetDialogueDataDir(string projectRoot) =>
@@ -481,20 +485,28 @@ public static class DialogueProjectService
                     var line = GetOrCreateLine(lines, key, order);
                     line.IdPart = key;
 
-                    var rawBaseScript = GetCell(row, 1);
-                    line.BaseScript = NormalizePlainScriptForExport(rawBaseScript);
-                    line.BackgroundPath = GetCellByColumn(row, header, "Background").Trim();
+                    var rawBaseScript = GetCellByColumn(row, header, "BaseScript");
+                    if (string.IsNullOrEmpty(rawBaseScript))
+                    {
+                        rawBaseScript = GetCell(row, 1);
+                    }
+
+                    var backgroundPath = NormalizeLegacyBackgroundCell(GetCellByColumn(row, header, "Background"));
+                    line.BaseScript = NormalizePlainScriptForExport(
+                        ConvertLegacyBackgroundDirective(rawBaseScript, ref backgroundPath));
+                    line.BackgroundPath = backgroundPath;
                     line.RoleImage1 = GetCellByColumn(row, header, "RoleImage1");
                     line.RoleImage2 = GetCellByColumn(row, header, "RoleImage2");
-                    line.EndScript = GetCellByColumn(row, header, "EndScript");
+                    line.EndScript = ConvertLegacyBackgroundDirective(GetCellByColumn(row, header, "EndScript"), ref backgroundPath);
                     line.Roles = GetCellByColumn(row, header, "Roles");
                     line.IsNarrator = ToBool(GetCellByColumn(row, header, "IsNarrator"));
                     line.EventName = GetCellByColumn(row, header, "EventName");
                     line.ChoiceCount = ToInt(GetCellByColumn(row, header, "ChoiceCount"));
-                    line.ChoiceScript1 = GetCellByColumn(row, header, "ChoiceScript1");
-                    line.ChoiceScript2 = GetCellByColumn(row, header, "ChoiceScript2");
-                    line.ChoiceScript3 = GetCellByColumn(row, header, "ChoiceScript3");
-                    line.ChoiceScript4 = GetCellByColumn(row, header, "ChoiceScript4");
+                    line.ChoiceScript1 = ConvertLegacyBackgroundDirective(GetCellByColumn(row, header, "ChoiceScript1"), ref backgroundPath);
+                    line.ChoiceScript2 = ConvertLegacyBackgroundDirective(GetCellByColumn(row, header, "ChoiceScript2"), ref backgroundPath);
+                    line.ChoiceScript3 = ConvertLegacyBackgroundDirective(GetCellByColumn(row, header, "ChoiceScript3"), ref backgroundPath);
+                    line.ChoiceScript4 = ConvertLegacyBackgroundDirective(GetCellByColumn(row, header, "ChoiceScript4"), ref backgroundPath);
+                    line.BackgroundPath = backgroundPath;
                 }
             }
         }
@@ -609,6 +621,42 @@ public static class DialogueProjectService
     private static string NormalizePlainScriptForExport(string? script)
     {
         return LuaScriptRuntimeService.NormalizeAliases((script ?? string.Empty).Trim());
+    }
+
+    private static string ConvertLegacyBackgroundDirective(string? script, ref string backgroundPath)
+    {
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return string.Empty;
+        }
+
+        var legacyBackgroundPath = string.Empty;
+        var converted = LegacyBackgroundDirectiveRegex.Replace(script, match =>
+        {
+            var path = match.Groups["path"].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(path) && string.IsNullOrWhiteSpace(legacyBackgroundPath))
+            {
+                legacyBackgroundPath = path;
+            }
+
+            return string.Empty;
+        });
+
+        if (string.IsNullOrWhiteSpace(backgroundPath) && !string.IsNullOrWhiteSpace(legacyBackgroundPath))
+        {
+            backgroundPath = legacyBackgroundPath;
+        }
+
+        return converted;
+    }
+
+    private static string NormalizeLegacyBackgroundCell(string? value)
+    {
+        var backgroundPath = string.Empty;
+        var normalized = ConvertLegacyBackgroundDirective(value, ref backgroundPath).Trim();
+        return !string.IsNullOrWhiteSpace(backgroundPath) && string.IsNullOrWhiteSpace(normalized)
+            ? backgroundPath
+            : normalized;
     }
 
     private static int FindColumn(string[] header, string name)

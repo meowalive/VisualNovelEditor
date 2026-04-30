@@ -19,6 +19,7 @@ env:
   RELEASE_TAG: Release
   PUBLISH_DIR: artifacts/publish/win-x64
   RELEASE_ASSET_NAME: VNEditor.exe
+  RELEASE_SHA256_ASSET_NAME: VNEditor.exe.sha256
 
 jobs:
   publish-and-upload:
@@ -47,6 +48,12 @@ jobs:
             -p:EditorRepositoryRemoteUrl="${{ github.server_url }}/${{ github.repository }}" \
             -o "$PUBLISH_DIR"
 
+      - name: Generate SHA256
+        shell: bash
+        run: |
+          cd "$PUBLISH_DIR"
+          sha256sum "${{ env.RELEASE_ASSET_NAME }}" > "${{ env.RELEASE_SHA256_ASSET_NAME }}"
+
       - name: Create Or Update Release On Gitea
         if: ${{ github.server_url != 'https://github.com' }}
         uses: akkuman/gitea-release-action@v1
@@ -58,6 +65,7 @@ jobs:
           name: ${{ env.RELEASE_TAG }}
           files: |
             ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_ASSET_NAME }}
+            ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_SHA256_ASSET_NAME }}
 
       - name: Create Or Update Release On GitHub
         if: ${{ github.server_url == 'https://github.com' }}
@@ -68,3 +76,4 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: |
             ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_ASSET_NAME }}
+            ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_SHA256_ASSET_NAME }}
