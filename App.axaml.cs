@@ -94,7 +94,7 @@ public partial class App : Application
             var ask = new UpdatePromptWindow(
                 result.LocalSha256 ?? string.Empty,
                 result.RemoteSha256 ?? string.Empty,
-                AutoUpdateService.GetReleasePageUrl());
+                result.ReleasePageUrl ?? AutoUpdateService.GetReleasePageUrl());
             ask.RequestedThemeVariant = mainWindow.ActualThemeVariant;
             var shouldUpdate = await ask.ShowDialog<bool>(mainWindow);
             if (!shouldUpdate)
