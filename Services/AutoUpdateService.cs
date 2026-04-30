@@ -83,13 +83,15 @@ public static class AutoUpdateService
 
             var tempExe = Path.Combine(baseDir, DownloadedExeTempName);
             var localSha = ComputeSha256(currentExe);
-            var releaseAsset = await GetTaggedReleaseExeAssetAsync(http, source);
+            var releaseLookup = await GetTaggedReleaseExeAssetAsync(http, source);
+            var releaseAsset = releaseLookup.Asset;
             if (releaseAsset == null || string.IsNullOrWhiteSpace(releaseAsset.BrowserDownloadUrl))
             {
                 return new UpdateCheckResult
                 {
                     Status = UpdateCheckStatus.NoReleaseAsset,
-                    ReleasePageUrl = source.ReleasePageUrl
+                    ReleasePageUrl = source.ReleasePageUrl,
+                    ErrorMessage = releaseLookup.ErrorMessage ?? "未找到可下载的 VNEditor.exe 资产。"
                 };
             }
 
@@ -452,23 +454,30 @@ public static class AutoUpdateService
         return builder.Uri;
     }
 
-    private static async Task<ReleaseAssetInfo?> GetTaggedReleaseExeAssetAsync(HttpClient http, ReleaseSourceInfo source)
+    private static async Task<ReleaseLookupResult> GetTaggedReleaseExeAssetAsync(HttpClient http, ReleaseSourceInfo source)
     {
         using var resp = await http.GetAsync(source.TaggedReleaseApiUrl);
         if (!resp.IsSuccessStatusCode)
         {
-            return null;
+            return new ReleaseLookupResult
+            {
+                ErrorMessage = $"Release API 请求失败：HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}。地址：{source.TaggedReleaseApiUrl}"
+            };
         }
 
         await using var stream = await resp.Content.ReadAsStreamAsync();
         using var doc = await JsonDocument.ParseAsync(stream);
         if (!doc.RootElement.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
-            return null;
+            return new ReleaseLookupResult
+            {
+                ErrorMessage = $"Release API 返回中没有 assets 数组。地址：{source.TaggedReleaseApiUrl}"
+            };
         }
 
         ReleaseAssetInfo? exeAsset = null;
         string? sha256DownloadUrl = null;
+        var assetNames = new List<string>();
         foreach (var asset in assets.EnumerateArray())
         {
             if (!asset.TryGetProperty("name", out var nameEl))
@@ -477,6 +486,11 @@ public static class AutoUpdateService
             }
 
             var name = nameEl.GetString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                assetNames.Add(name);
+            }
+
             if (asset.TryGetProperty("browser_download_url", out var urlEl))
             {
                 var downloadUrl = urlEl.GetString();
@@ -512,7 +526,15 @@ public static class AutoUpdateService
             exeAsset.Sha256DownloadUrl = sha256DownloadUrl;
         }
 
-        return exeAsset;
+        return new ReleaseLookupResult
+        {
+            Asset = exeAsset,
+            ErrorMessage = exeAsset == null
+                ? assetNames.Count == 0
+                    ? $"Release 中没有上传资产。地址：{source.ReleasePageUrl}"
+                    : $"Release 中没有找到 {ReleaseExeName}。已有资产：{string.Join(", ", assetNames)}"
+                : null
+        };
     }
 
     private static async Task<string> GetReleaseAssetSha256Async(HttpClient http, ReleaseAssetInfo releaseAsset)
@@ -685,6 +707,12 @@ public static class AutoUpdateService
         public string BrowserDownloadUrl { get; init; } = string.Empty;
         public string Sha256Digest { get; set; } = string.Empty;
         public string? Sha256DownloadUrl { get; set; }
+    }
+
+    private sealed class ReleaseLookupResult
+    {
+        public ReleaseAssetInfo? Asset { get; init; }
+        public string? ErrorMessage { get; init; }
     }
 
     private sealed class ReleaseSourceInfo
