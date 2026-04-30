@@ -164,7 +164,7 @@ public static class ProjectGitService
         return merge;
     }
 
-    /// <summary>在仓库根目录执行 <c>git lfs pull</c> 与 <c>git lfs checkout</c>（将指针替换为真实内容）。优先使用程序目录下的 <c>git-lfs.exe</c>。</summary>
+    /// <summary>在仓库根目录执行 <c>git lfs pull</c> 与 <c>git lfs checkout</c>（将指针替换为真实内容）。</summary>
     public static (bool Ok, string? Error) TryRunGitLfsPull(string workDir)
     {
         var root = Repository.Discover(workDir);
@@ -173,14 +173,14 @@ public static class ProjectGitService
             return (false, "未找到 Git 仓库。");
         }
 
-        var pull = RunGitLfsSubcommand(root, "pull", "lfs pull");
+        var pull = RunGitLfsSubcommand(root, "lfs pull");
         if (!pull.Ok)
         {
             return (false, "git lfs pull 失败：\n" + pull.Error);
         }
 
         // LibGit2Sharp 签出等写入的是指针文本时，pull 下载对象后需 checkout 才能覆盖工作区
-        var checkout = RunGitLfsSubcommand(root, "checkout", "lfs checkout");
+        var checkout = RunGitLfsSubcommand(root, "lfs checkout");
         if (!checkout.Ok)
         {
             return (false, "git lfs checkout 失败：\n" + checkout.Error);
@@ -189,35 +189,12 @@ public static class ProjectGitService
         return (true, null);
     }
 
-    private static (bool Ok, string? Error) RunGitLfsSubcommand(
-        string repoRoot,
-        string bundledArguments,
-        string gitCliArguments)
+    private static (bool Ok, string? Error) RunGitLfsSubcommand(string repoRoot, string gitCliArguments)
     {
-        var bundled = FindBundledGitLfsExecutable();
-        if (!string.IsNullOrWhiteSpace(bundled))
-        {
-            var bundledResult = TryRunProcess(repoRoot, bundled, bundledArguments);
-            if (bundledResult.Ok)
-            {
-                return (true, null);
-            }
-
-            if (!bundledResult.StartFailed)
-            {
-                return (false, bundledResult.Error);
-            }
-        }
-
         var cliResult = TryRunProcess(repoRoot, "git", gitCliArguments);
         if (cliResult.Ok)
         {
             return (true, null);
-        }
-
-        if (!string.IsNullOrWhiteSpace(bundled) && cliResult.StartFailed)
-        {
-            return (false, "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中。");
         }
 
         return (false, cliResult.Error);
@@ -261,33 +238,9 @@ public static class ProjectGitService
         {
             var hint = string.Equals(fileName, "git", StringComparison.OrdinalIgnoreCase)
                 ? "请确认已安装 Git 与 Git LFS，且 git 在 PATH 中"
-                : "程序自带 Git LFS 不可用";
+                : "无法启动外部程序";
             return (false, true, hint + "\n" + ex.Message);
         }
-    }
-
-    /// <summary>与主程序同目录的便携 Git LFS（单文件发布时也在 exe 旁）。</summary>
-    private static string? FindBundledGitLfsExecutable()
-    {
-        var baseDir = AppContext.BaseDirectory;
-        if (string.IsNullOrEmpty(baseDir))
-        {
-            return null;
-        }
-
-        var win = Path.Combine(baseDir, "git-lfs.exe");
-        if (File.Exists(win))
-        {
-            return win;
-        }
-
-        var unix = Path.Combine(baseDir, "git-lfs");
-        if (File.Exists(unix))
-        {
-            return unix;
-        }
-
-        return null;
     }
 
     /// <summary>上传前：先拉取合并；若存在合并冲突则中止（恢复合并前状态），不允许上传。</summary>

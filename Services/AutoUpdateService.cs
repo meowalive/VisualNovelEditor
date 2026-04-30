@@ -3,11 +3,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using LibGit2Sharp;
 
 namespace VNEditor.Services;
 
@@ -64,7 +64,7 @@ public static class AutoUpdateService
                 return new UpdateCheckResult
                 {
                     Status = UpdateCheckStatus.Failed,
-                    ErrorMessage = "无法从当前 Git 仓库推断更新源。"
+                    ErrorMessage = "无法读取构建时写入的更新源。"
                 };
             }
             ApplyGitCredentials(http, source);
@@ -225,7 +225,7 @@ public static class AutoUpdateService
 
     private static ReleaseSourceInfo? TryGetReleaseSource()
     {
-        var remoteUrl = TryGetCurrentRepositoryRemoteUrl();
+        var remoteUrl = GetBuildRepositoryRemoteUrl();
         if (string.IsNullOrWhiteSpace(remoteUrl))
         {
             return null;
@@ -234,44 +234,16 @@ public static class AutoUpdateService
         return TryBuildReleaseSource(remoteUrl);
     }
 
-    private static string? TryGetCurrentRepositoryRemoteUrl()
+    private static string? GetBuildRepositoryRemoteUrl()
     {
-        try
+        var assembly = typeof(AutoUpdateService).Assembly;
+        foreach (var meta in assembly.GetCustomAttributes<AssemblyMetadataAttribute>())
         {
-            var root = Repository.Discover(AppContext.BaseDirectory) ?? Repository.Discover(Environment.CurrentDirectory);
-            if (string.IsNullOrEmpty(root))
+            if (meta.Key.Equals("EditorRepositoryRemoteUrl", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(meta.Value))
             {
-                return null;
+                return meta.Value;
             }
-
-            using var repo = new Repository(root);
-            var remoteName = repo.Head.RemoteName;
-            if (!string.IsNullOrWhiteSpace(remoteName))
-            {
-                var trackingRemote = repo.Network.Remotes[remoteName];
-                if (!string.IsNullOrWhiteSpace(trackingRemote?.Url))
-                {
-                    return trackingRemote.Url;
-                }
-            }
-
-            var origin = repo.Network.Remotes["origin"];
-            if (!string.IsNullOrWhiteSpace(origin?.Url))
-            {
-                return origin.Url;
-            }
-
-            foreach (var remote in repo.Network.Remotes)
-            {
-                if (!string.IsNullOrWhiteSpace(remote.Url))
-                {
-                    return remote.Url;
-                }
-            }
-        }
-        catch
-        {
-            return null;
         }
 
         return null;
@@ -391,14 +363,13 @@ public static class AutoUpdateService
     {
         try
         {
-            var root = Repository.Discover(AppContext.BaseDirectory) ?? Repository.Discover(Environment.CurrentDirectory);
             using var p = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "git",
                     Arguments = "credential fill",
-                    WorkingDirectory = string.IsNullOrEmpty(root) ? AppContext.BaseDirectory : root,
+                    WorkingDirectory = AppContext.BaseDirectory,
                     UseShellExecute = false,
                     RedirectStandardInput = true,
                     RedirectStandardOutput = true,

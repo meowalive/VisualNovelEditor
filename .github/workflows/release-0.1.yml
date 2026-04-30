@@ -44,6 +44,7 @@ jobs:
             -c Release \
             -r win-x64 \
             --self-contained true \
+            -p:EditorRepositoryRemoteUrl="${{ github.server_url }}/${{ github.repository }}" \
             -o "$PUBLISH_DIR"
 
       - name: Create Or Update Release On Gitea

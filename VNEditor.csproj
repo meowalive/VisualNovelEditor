@@ -26,11 +26,26 @@
     <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="git-lfs.exe" Condition="Exists('$(MSBuildProjectDirectory)\git-lfs.exe')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
-    </Content>
-  </ItemGroup>
+  <Target Name="CaptureEditorRepositoryRemoteUrl" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git config --get remote.origin.url"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          IgnoreExitCode="true"
+          Condition="'$(EditorRepositoryRemoteUrl)' == ''">
+      <Output TaskParameter="ConsoleOutput" ItemName="_DetectedEditorRepositoryRemoteUrl" />
+    </Exec>
+
+    <PropertyGroup>
+      <EditorRepositoryRemoteUrl Condition="'$(EditorRepositoryRemoteUrl)' == ''">@(_DetectedEditorRepositoryRemoteUrl)</EditorRepositoryRemoteUrl>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(EditorRepositoryRemoteUrl)' != ''">
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>EditorRepositoryRemoteUrl</_Parameter1>
+        <_Parameter2>$(EditorRepositoryRemoteUrl)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
 </Project>
