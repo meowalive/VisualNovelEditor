@@ -53,12 +53,24 @@ jobs:
           path: ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_ASSET_NAME }}
           if-no-files-found: error
 
-      - name: Create Or Update Release
+      - name: Create Or Update Release On Gitea
+        if: ${{ github.server_url != 'https://github.com' }}
         uses: akkuman/gitea-release-action@v1
         with:
           token: ${{ github.token }}
+          server_url: ${{ github.server_url }}
           repository: ${{ github.repository }}
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_TAG }}
+          files: |
+            ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_ASSET_NAME }}
+
+      - name: Create Or Update Release On GitHub
+        if: ${{ github.server_url == 'https://github.com' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           files: |
             ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_ASSET_NAME }}
