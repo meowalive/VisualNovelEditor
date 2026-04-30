@@ -46,13 +46,6 @@ jobs:
             --self-contained true \
             -o "$PUBLISH_DIR"
 
-      - name: Upload Workflow Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: VNEditor-exe
-          path: ${{ env.PUBLISH_DIR }}/${{ env.RELEASE_ASSET_NAME }}
-          if-no-files-found: error
-
       - name: Create Or Update Release On Gitea
         if: ${{ github.server_url != 'https://github.com' }}
         uses: akkuman/gitea-release-action@v1
