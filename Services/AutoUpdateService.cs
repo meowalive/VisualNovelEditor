@@ -317,6 +317,13 @@ public static class AutoUpdateService
 
     private static void ApplyGitCredentials(HttpClient http, ReleaseSourceInfo source)
     {
+        var token = GetUpdateToken();
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", token);
+            return;
+        }
+
         var credentials = source.EmbeddedCredentials ?? TryGetGitCredentials(source.RepositoryUrl);
         if (credentials == null)
         {
@@ -371,7 +378,11 @@ public static class AutoUpdateService
             p.Start();
             p.StandardInput.WriteLine($"protocol={repoUrl.Scheme}");
             p.StandardInput.WriteLine($"host={repoUrl.Authority}");
-            p.StandardInput.WriteLine($"path={repoUrl.AbsolutePath.TrimStart('/')}");
+            if (!string.IsNullOrWhiteSpace(repoUrl.AbsolutePath.Trim('/')))
+            {
+                p.StandardInput.WriteLine($"path={repoUrl.AbsolutePath.TrimStart('/')}");
+            }
+
             p.StandardInput.WriteLine();
             p.StandardInput.Close();
 
@@ -437,6 +448,25 @@ public static class AutoUpdateService
         {
             return null;
         }
+    }
+
+    private static string? GetUpdateToken()
+    {
+        foreach (var name in new[]
+                 {
+                     "VNEDITOR_UPDATE_TOKEN",
+                     "VNEDITOR_GITEA_TOKEN",
+                     "GITEA_TOKEN"
+                 })
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
     }
 
     private static Uri StripUserInfo(Uri uri)
