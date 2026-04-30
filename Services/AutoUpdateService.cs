@@ -84,6 +84,16 @@ public static class AutoUpdateService
             var tempExe = Path.Combine(baseDir, DownloadedExeTempName);
             var localSha = ComputeSha256(currentExe);
             var releaseLookup = await GetTaggedReleaseExeAssetAsync(http, source);
+            if (releaseLookup.RequiresLogin && TryRefreshGitCredentials(source.RepositoryUrl))
+            {
+                using var retryHttp = new HttpClient();
+                retryHttp.Timeout = TimeSpan.FromSeconds(25);
+                retryHttp.DefaultRequestHeaders.UserAgent.ParseAdd("VNEditor-AutoUpdater/1.0");
+                retryHttp.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+                ApplyGitCredentials(retryHttp, source);
+                releaseLookup = await GetTaggedReleaseExeAssetAsync(retryHttp, source);
+            }
+
             var releaseAsset = releaseLookup.Asset;
             if (releaseAsset == null || string.IsNullOrWhiteSpace(releaseAsset.BrowserDownloadUrl))
             {
@@ -317,13 +327,6 @@ public static class AutoUpdateService
 
     private static void ApplyGitCredentials(HttpClient http, ReleaseSourceInfo source)
     {
-        var token = GetUpdateToken();
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", token);
-            return;
-        }
-
         var credentials = source.EmbeddedCredentials ?? TryGetGitCredentials(source.RepositoryUrl);
         if (credentials == null)
         {
@@ -358,6 +361,12 @@ public static class AutoUpdateService
 
     private static GitHttpCredentials? TryGetGitCredentials(Uri repoUrl)
     {
+        return TryGetGitCredentials(repoUrl, includePath: true)
+               ?? TryGetGitCredentials(repoUrl, includePath: false);
+    }
+
+    private static GitHttpCredentials? TryGetGitCredentials(Uri repoUrl, bool includePath)
+    {
         try
         {
             using var p = new Process
@@ -378,7 +387,7 @@ public static class AutoUpdateService
             p.Start();
             p.StandardInput.WriteLine($"protocol={repoUrl.Scheme}");
             p.StandardInput.WriteLine($"host={repoUrl.Authority}");
-            if (!string.IsNullOrWhiteSpace(repoUrl.AbsolutePath.Trim('/')))
+            if (includePath && !string.IsNullOrWhiteSpace(repoUrl.AbsolutePath.Trim('/')))
             {
                 p.StandardInput.WriteLine($"path={repoUrl.AbsolutePath.TrimStart('/')}");
             }
@@ -450,23 +459,52 @@ public static class AutoUpdateService
         }
     }
 
-    private static string? GetUpdateToken()
+    private static bool TryRefreshGitCredentials(Uri repoUrl)
     {
-        foreach (var name in new[]
-                 {
-                     "VNEDITOR_UPDATE_TOKEN",
-                     "VNEDITOR_GITEA_TOKEN",
-                     "GITEA_TOKEN"
-                 })
+        try
         {
-            var value = Environment.GetEnvironmentVariable(name);
-            if (!string.IsNullOrWhiteSpace(value))
+            using var p = new Process
             {
-                return value.Trim();
-            }
-        }
+                StartInfo = new ProcessStartInfo
+                 {
+                    FileName = "git",
+                    Arguments = $"ls-remote {QuoteGitArgument(repoUrl.ToString())} HEAD",
+                    WorkingDirectory = AppContext.BaseDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                }
+            };
 
-        return null;
+            p.Start();
+            _ = p.StandardOutput.ReadToEndAsync();
+            _ = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(120_000))
+            {
+                try
+                {
+                    p.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // ignore kill failure
+                }
+
+                return false;
+            }
+
+            return p.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string QuoteGitArgument(string value)
+    {
+        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
     }
 
     private static Uri StripUserInfo(Uri uri)
@@ -491,7 +529,8 @@ public static class AutoUpdateService
         {
             return new ReleaseLookupResult
             {
-                ErrorMessage = $"Release API 请求失败：HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}。地址：{source.TaggedReleaseApiUrl}"
+                ErrorMessage = $"Release API 请求失败：HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}。地址：{source.TaggedReleaseApiUrl}",
+                RequiresLogin = (int)resp.StatusCode is 401 or 403
             };
         }
 
@@ -743,6 +782,7 @@ public static class AutoUpdateService
     {
         public ReleaseAssetInfo? Asset { get; init; }
         public string? ErrorMessage { get; init; }
+        public bool RequiresLogin { get; init; }
     }
 
     private sealed class ReleaseSourceInfo
