@@ -687,10 +687,12 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var idx = RoleEntries.IndexOf(SelectedRoleEntry);
-        UnsubscribeRoleEntry(SelectedRoleEntry);
-        var removedCategory = SelectedRoleEntry.Category;
-        RoleEntries.Remove(SelectedRoleEntry);
+        var removedRole = SelectedRoleEntry;
+        var idx = RoleEntries.IndexOf(removedRole);
+        var removedCategory = removedRole.Category;
+        SelectedRoleEntry = null;
+        UnsubscribeRoleEntry(removedRole);
+        RoleEntries.Remove(removedRole);
         RefreshRoleCategories();
         if (!string.IsNullOrWhiteSpace(removedCategory)
             && !RoleCategories.Any(x => x.Equals(removedCategory, StringComparison.OrdinalIgnoreCase)))
@@ -699,6 +701,18 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         RefreshFilteredRoleEntries();
         SelectedRoleEntry = FilteredRoleEntries.Count == 0 ? null : FilteredRoleEntries[Math.Clamp(idx, 0, FilteredRoleEntries.Count - 1)];
+        if (!string.IsNullOrWhiteSpace(_projectRoot)
+            && !RoleEntries.Any(r =>
+                string.Equals(
+                    string.IsNullOrWhiteSpace(r.Category) ? InferCategoryFromRoleId(r.Id) : r.Category,
+                    removedCategory,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            var deletedPaths = DialogueProjectService.GetRoleCategoryCsvFilePaths(_projectRoot, removedCategory);
+            DialogueProjectService.DeleteRoleCategoryCsvFiles(_projectRoot, removedCategory);
+            TryGitCommitAfterSaveRoles(deletedPaths);
+        }
+
         RefreshRoleMapsAndOptions();
         StatusText = "已删除角色。";
     }
@@ -729,6 +743,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         var category = SelectedRoleCategory;
+        SelectedRoleEntry = null;
         var toRemove = RoleEntries.Where(r => r.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
         foreach (var role in toRemove)
         {
@@ -738,9 +753,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
         RoleCategories.Remove(category);
         SelectedRoleCategory = RoleCategories.FirstOrDefault();
+        string[]? deletedPaths = null;
         if (!string.IsNullOrWhiteSpace(_projectRoot))
         {
+            deletedPaths = DialogueProjectService.GetRoleCategoryCsvFilePaths(_projectRoot, category);
             DialogueProjectService.DeleteRoleCategoryCsvFiles(_projectRoot, category);
+            TryGitCommitAfterSaveRoles(deletedPaths);
         }
 
         RefreshFilteredRoleEntries();

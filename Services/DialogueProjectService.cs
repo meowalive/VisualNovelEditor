@@ -398,11 +398,9 @@ public static class DialogueProjectService
     /// <summary>删除某分类在 Data/Text RoleData 下对应的两个 CSV（「删除分类」按钮）。</summary>
     public static void DeleteRoleCategoryCsvFiles(string projectRoot, string category)
     {
-        var c = NormalizeCategoryName(category);
-        var dataDir = GetRoleDataDataDir(projectRoot);
-        var textDir = GetRoleDataTextDir(projectRoot);
-        var dataPath = Path.Combine(dataDir, $"{c}.csv");
-        var textPath = Path.Combine(textDir, $"{c}.csv");
+        var paths = GetRoleCategoryCsvFilePaths(projectRoot, category);
+        var dataPath = paths[0];
+        var textPath = paths[1];
         try
         {
             if (File.Exists(dataPath))
@@ -419,6 +417,18 @@ public static class DialogueProjectService
         {
             // 忽略删除失败，避免阻断 UI
         }
+    }
+
+    public static string[] GetRoleCategoryCsvFilePaths(string projectRoot, string category)
+    {
+        var c = NormalizeCategoryName(category);
+        var dataDir = GetRoleDataDataDir(projectRoot);
+        var textDir = GetRoleDataTextDir(projectRoot);
+        return
+        [
+            Path.Combine(dataDir, $"{c}.csv"),
+            Path.Combine(textDir, $"{c}.csv")
+        ];
     }
 
     private static string InferCategoryFromId(string roleId)

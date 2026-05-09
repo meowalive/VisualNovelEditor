@@ -151,7 +151,8 @@ public static class CsvUtility
     public static void WriteAllRows(string path, IEnumerable<string[]> rows)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
+        // Emit a UTF-8 BOM so Windows spreadsheet tools reliably detect the file encoding.
+        using var writer = new StreamWriter(path, false, new UTF8Encoding(true));
         foreach (var row in rows)
         {
             var escaped = row.Select(EscapeCell);

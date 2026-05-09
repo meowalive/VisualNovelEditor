@@ -340,7 +340,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    private void TryGitCommitAfterSaveRoles()
+    private void TryGitCommitAfterSaveRoles(IEnumerable<string>? extraPaths = null)
     {
         if (!GitPanelEnabled || string.IsNullOrEmpty(_projectRoot))
         {
@@ -348,6 +348,16 @@ public partial class MainWindowViewModel
         }
 
         var paths = CollectRoleCsvAbsolutePaths(_projectRoot);
+        if (extraPaths != null)
+        {
+            paths.AddRange(extraPaths.Where(static p => !string.IsNullOrWhiteSpace(p)));
+        }
+
+        paths = paths
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         if (paths.Count == 0)
         {
             return;
