@@ -1257,7 +1257,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     : $"{storedPrefix}/{relative}";
             options.Add(new ImageOption
             {
-                Path = storedPath,
+                Path = NormalizeImageSelectionPath(storedPath),
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? relative : displayName
             });
         }
@@ -1306,12 +1306,16 @@ public partial class MainWindowViewModel : ViewModelBase
         _updatingRoleSelectors = true;
         try
         {
-            SelectedRoleEntryImageOption = FindImageOptionByPath(SelectedRoleEntryImageOptions, currentPath)
-                ?? SelectedRoleEntryImageOptions.FirstOrDefault();
-            if (role != null && SelectedRoleEntryImageOption != null
-                && !string.Equals(role.CharacterImage, SelectedRoleEntryImageOption.Path, StringComparison.Ordinal))
+            var matched = FindImageOptionByPath(SelectedRoleEntryImageOptions, currentPath);
+            SelectedRoleEntryImageOption = matched;
+            if (role != null && matched != null
+                && !string.Equals(role.CharacterImage, matched.Path, StringComparison.Ordinal))
             {
-                role.CharacterImage = SelectedRoleEntryImageOption.Path;
+                role.CharacterImage = matched.Path;
+            }
+            else if (role != null && string.IsNullOrWhiteSpace(currentPath))
+            {
+                SelectedRoleEntryImageOption = SelectedRoleEntryImageOptions.FirstOrDefault();
             }
         }
         finally
@@ -1331,14 +1335,33 @@ public partial class MainWindowViewModel : ViewModelBase
         _updatingRoleSelectors = true;
         try
         {
-            SelectedRole1ImageOption = FindImageOptionByPath(Role1ImageOptions, SelectedLine?.RoleImage1 ?? string.Empty)
-                ?? Role1ImageOptions.FirstOrDefault();
-            SelectedRole2ImageOption = FindImageOptionByPath(Role2ImageOptions, SelectedLine?.RoleImage2 ?? string.Empty)
-                ?? Role2ImageOptions.FirstOrDefault();
+            var currentRoleImage1 = SelectedLine?.RoleImage1 ?? string.Empty;
+            var currentRoleImage2 = SelectedLine?.RoleImage2 ?? string.Empty;
+            var matchedRole1 = FindImageOptionByPath(Role1ImageOptions, currentRoleImage1);
+            var matchedRole2 = FindImageOptionByPath(Role2ImageOptions, currentRoleImage2);
+
+            SelectedRole1ImageOption = matchedRole1;
+            SelectedRole2ImageOption = matchedRole2;
+
             if (SelectedLine != null)
             {
-                SelectedLine.RoleImage1 = SelectedRole1ImageOption?.Path ?? string.Empty;
-                SelectedLine.RoleImage2 = SelectedRole2ImageOption?.Path ?? string.Empty;
+                if (matchedRole1 != null && !string.Equals(SelectedLine.RoleImage1, matchedRole1.Path, StringComparison.Ordinal))
+                {
+                    SelectedLine.RoleImage1 = matchedRole1.Path;
+                }
+                else if (string.IsNullOrWhiteSpace(currentRoleImage1))
+                {
+                    SelectedRole1ImageOption = Role1ImageOptions.FirstOrDefault();
+                }
+
+                if (matchedRole2 != null && !string.Equals(SelectedLine.RoleImage2, matchedRole2.Path, StringComparison.Ordinal))
+                {
+                    SelectedLine.RoleImage2 = matchedRole2.Path;
+                }
+                else if (string.IsNullOrWhiteSpace(currentRoleImage2))
+                {
+                    SelectedRole2ImageOption = Role2ImageOptions.FirstOrDefault();
+                }
             }
         }
         finally
@@ -1372,7 +1395,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private static ImageOption? FindImageOptionByPath(IEnumerable<ImageOption> options, string path)
     {
-        return options.FirstOrDefault(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase));
+        var normalizedTarget = NormalizeImageSelectionPath(path);
+        return options.FirstOrDefault(x =>
+            string.Equals(NormalizeImageSelectionPath(x.Path), normalizedTarget, StringComparison.OrdinalIgnoreCase));
     }
 
     private void UpdateSelectedRoleEntryCharacterImage()
@@ -1385,7 +1410,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var nextPath = SelectedRoleEntryImageOption?.Path ?? string.Empty;
         if (!string.Equals(SelectedRoleEntry.CharacterImage, nextPath, StringComparison.Ordinal))
         {
-            SelectedRoleEntry.CharacterImage = nextPath;
+            SelectedRoleEntry.CharacterImage = NormalizeImageSelectionPath(nextPath);
         }
     }
 
@@ -1396,8 +1421,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        SelectedLine.RoleImage1 = SelectedRole1ImageOption?.Path ?? string.Empty;
-        SelectedLine.RoleImage2 = SelectedRole2ImageOption?.Path ?? string.Empty;
+        SelectedLine.RoleImage1 = NormalizeImageSelectionPath(SelectedRole1ImageOption?.Path);
+        SelectedLine.RoleImage2 = NormalizeImageSelectionPath(SelectedRole2ImageOption?.Path);
     }
 
     private void RefreshRoleCategories()
@@ -2534,6 +2559,27 @@ public partial class MainWindowViewModel : ViewModelBase
     private static string NormalizeStoredDirectoryPath(string? path)
     {
         return (path ?? string.Empty).Trim().TrimEnd('\\', '/').Replace('\\', '/');
+    }
+
+    private static string NormalizeImageSelectionPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = path.Trim();
+        var ext = Path.GetExtension(trimmed);
+        if (ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.ChangeExtension(trimmed, null) ?? trimmed;
+        }
+
+        return trimmed;
     }
 
     private bool TryResolveJumpFromAction(DialogueScriptAction action, out int targetIndex)
